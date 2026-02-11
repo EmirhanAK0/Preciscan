@@ -8,6 +8,14 @@ This document defines the UART control channel between \*\*PC (Master)\*\* and \
 
 Status: Draft (M1)
 
+Framing rules: see framing.md”
+
+
+
+“Message schema: see schema/commands.proto”
+
+
+
 
 
 ---
@@ -143,6 +151,8 @@ States (draft):
 \- MCU must enter `FAULT` on heartbeat timeout.
 
 \- `ESTOP` must be handled with highest priority.
+
+
 
 
 

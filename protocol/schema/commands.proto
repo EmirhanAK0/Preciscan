@@ -1,0 +1,81 @@
+syntax = "proto3";
+package preciscan;
+
+// PC -> MCU
+message Ping {}
+
+message Heartbeat {
+  uint32 seq = 1;
+}
+
+message Estop {}
+
+message ClearFault {}
+
+message Home {}
+
+message MoveAbs {
+  // Units TBD: prefer micrometers for integer determinism on MCU
+  int32 pos_um = 1;
+  uint32 vel_um_s = 2;
+  uint32 acc_um_s2 = 3;
+}
+
+message MoveRel {
+  int32 delta_um = 1;
+  uint32 vel_um_s = 2;
+  uint32 acc_um_s2 = 3;
+}
+
+message Jog {
+  int32 dir = 1;        // -1 or +1
+  uint32 vel_um_s = 2;
+}
+
+message ScanStart {
+  uint32 scan_id = 1;
+  uint32 step_angle_mdeg = 2; // milli-degree, if using angular stepping
+  int32 z_start_um = 3;
+  int32 z_end_um = 4;
+  uint32 z_step_um = 5;
+}
+
+message ScanStop {}
+
+message GetStatus {}
+
+message SetParam {
+  string key = 1;
+  string value = 2;
+}
+
+// MCU -> PC
+message Pong {
+  string fw_version = 1;
+}
+
+message Status {
+  string state = 1;     // e.g., IDLE/HOMING/READY/SCANNING/FAULT/ESTOP
+  int32 pos_um = 2;
+  int32 vel_um_s = 3;
+  uint32 fault_code = 4;
+}
+
+message Fault {
+  uint32 fault_code = 1;
+  string details = 2;
+}
+
+message HeartbeatAck {
+  uint32 seq = 1;
+}
+
+message LimitHit {
+  string which = 1;     // e.g., X_MIN, X_MAX, Z_MIN, Z_MAX
+}
+
+// Envelope (framing layer will carry msg_id + payload bytes)
+message Envelope {
+  uint32 msg_id = 1;
+  bytes payload = 2;
+}
