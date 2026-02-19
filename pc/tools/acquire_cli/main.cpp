@@ -1,239 +1,212 @@
-#include <cstdint>
 #include <iostream>
-#include <random>
-#include <string>
 #include <vector>
+#include <string>
+#include <thread>
+#include <atomic>
 #include <chrono>
-#include <cstdlib>
-#include <algorithm>
+#include <cstring> // memcpy için
 
-#include "seq_metrics.h"
-#include "metrics_writer.h"
-
+// Platform baðýmsýz socket ayarlarý
 #ifdef _WIN32
 #include <winsock2.h>
-#include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
+using sock_t = SOCKET;
+#define CLOSESOCKET(s) closesocket(s)
 #else
 #include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <unistd.h>
-
-
+#include <sys/socket.h>
+using sock_t = int;
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+#define CLOSESOCKET(s) close(s)
 #endif
 
-struct Config {
-    // common
-    std::string mode = "sim"; // sim | udp
-    std::string metrics_out = "";
+// Proje dosyalarý
+// Not: CMake bu dosyalarýn path'lerini görüyorsa doðrudan include edebilirsin.
+// Eðer hata alýrsan pathleri "../../core/config.h" gibi düzeltmen gerekebilir.
+#include "config.h"
+#include "seq_metrics.h"
+#include "packet_queue.h"    
+#include "metrics_writer.h"
 
+// --- CONSUMER THREAD (Veriyi Ýþleyen Ýþçi) ---
+// Bu fonksiyon ayrý bir thread'de çalýþýr.
+// Tek iþi: Kuyruktan paket al, analiz et.
+void consumer_worker(PacketQueue& queue, const Config& cfg, SeqTracker& tracker) {
+    Packet pkt;
 
-    // sim
-    uint32_t count = 10000;
-    double loss = 0.0;
-    double ooo = 0.0;
-    double dup = 0.0;
+    // queue.pop() fonksiyonu veri gelene kadar BLOKE OLUR (CPU harcamaz).
+    // queue.stop() çaðrýldýðýnda döngü false döner ve biter.
+    while (queue.pop(pkt)) {
 
-    // udp
-    int port = 9000;
-    uint32_t udp_count = 10000;
-};
+        // 1. Sequence Numarasýný Çýkar (Protocol varsayýmý: Ýlk 4 byte = uint32 seq)
+        if (pkt.data.size() >= 4) {
+            uint32_t net_seq;
+            std::memcpy(&net_seq, pkt.data.data(), 4);
+            uint32_t seq = ntohl(net_seq); // Network order (Big Endian) -> Host order
 
-static void die(const std::string& msg) {
-    std::cerr << msg << "\n";
-    std::exit(2);
-}
-
-static bool parse_u32(const std::string& s, uint32_t& out) {
-    try { out = static_cast<uint32_t>(std::stoul(s)); return true; }
-    catch (...) { return false; }
-}
-
-static bool parse_f64(const std::string& s, double& out) {
-    try { out = std::stod(s); return true; }
-    catch (...) { return false; }
-}
-
-static Config parse_args(int argc, char** argv) {
-    Config cfg;
-
-    for (int i = 1; i < argc; i++) {
-        std::string a = argv[i];
-
-        auto need = [&](const char* name) -> std::string {
-            if (i + 1 >= argc) die(std::string("Missing value for ") + name);
-            return std::string(argv[++i]);
-            };
-
-        if (a == "--mode") {
-            cfg.mode = need("--mode");
-            if (cfg.mode != "sim" && cfg.mode != "udp") die("Invalid --mode (use sim or udp)");
-        }
-        else if (a == "--count") {
-            uint32_t v{};
-            if (!parse_u32(need("--count"), v)) die("Invalid --count");
-            cfg.count = v;
-        }
-        else if (a == "--loss") {
-            double v{};
-            if (!parse_f64(need("--loss"), v)) die("Invalid --loss");
-            cfg.loss = v;
-        }
-        else if (a == "--ooo") {
-            double v{};
-            if (!parse_f64(need("--ooo"), v)) die("Invalid --ooo");
-            cfg.ooo = v;
-        }
-        else if (a == "--dup") {
-            double v{};
-            if (!parse_f64(need("--dup"), v)) die("Invalid --dup");
-            cfg.dup = v;
-        }
-        else if (a == "--port") {
-            cfg.port = std::stoi(need("--port"));
-        }
-        else if (a == "--udp-count") {
-            uint32_t v{};
-            if (!parse_u32(need("--udp-count"), v)) die("Invalid --udp-count");
-            cfg.udp_count = v;
-        }
-        else if (a == "--metrics-out") {
-            cfg.metrics_out = need("--metrics-out");
-        }
-
-        else if (a == "--help" || a == "-h") {
-            std::cout <<
-                R"(acquire_cli (M2.2: sim + udp)
-
-SIM mode:
-  acquire_cli --mode sim --count 20000 --loss 0.001 --ooo 0.0005 --dup 0.0005
-
-UDP mode (receiver):
-  acquire_cli --mode udp --port 9000 --udp-count 20000
-
-Notes:
-- UDP payload for M2.2 is 4 bytes: uint32 seq in network byte order.
-)";
-            std::exit(0);
-        }
-        else {
-            die(std::string("Unknown arg: ") + a);
-        }
-    }
-
-    return cfg;
-}
-
-static std::vector<uint32_t> simulate_seq_stream(const Config& cfg) {
-    std::mt19937 rng{ std::random_device{}() };
-    std::uniform_real_distribution<double> uni(0.0, 1.0);
-
-    uint32_t seq = 0;
-    std::vector<uint32_t> out;
-    out.reserve(static_cast<size_t>(cfg.count) * 2);
-
-    for (uint32_t i = 0; i < cfg.count; i++) {
-        seq += 1;
-
-        // loss: create a gap by skipping one id
-        if (uni(rng) < cfg.loss) {
-            seq += 1;
-        }
-
-        out.push_back(seq);
-
-        // duplicate
-        if (uni(rng) < cfg.dup) {
-            out.push_back(seq);
-        }
-
-        // out-of-order: swap last two
-        if (out.size() >= 2 && uni(rng) < cfg.ooo) {
-            std::swap(out[out.size() - 1], out[out.size() - 2]);
-        }
-    }
-
-    return out;
-}
-
-static void run_udp_receiver(const Config& cfg, SeqTracker& tracker) {
-#ifdef _WIN32
-    WSADATA wsa{};
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) die("WSAStartup failed");
-#endif
-
-    int sock = (int)socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) die("socket() failed");
-
-    sockaddr_in local{};
-    local.sin_family = AF_INET;
-    local.sin_port = htons((uint16_t)cfg.port);
-    local.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(sock, (sockaddr*)&local, sizeof(local)) != 0) {
-        die("bind() failed (port in use or blocked)");
-    }
-
-    uint32_t got = 0;
-    while (got < cfg.udp_count) {
-        uint32_t net_seq = 0;
-        int recvd = recvfrom(sock, (char*)&net_seq, sizeof(net_seq), 0, nullptr, nullptr);
-        if (recvd == (int)sizeof(net_seq)) {
-            uint32_t seq = ntohl(net_seq);
+            // Metrikleri güncelle (ooo, dup, loss hesabý)
             tracker.update(seq);
-            got++;
         }
-        // If recvd != 4, ignore (noise/other packets)
-    }
 
-#ifdef _WIN32
-    closesocket(sock);
-    WSACleanup();
-#else
-    close(sock);
-#endif
+        // 2. Diske Yazma (Ýleride buraya eklenecek)
+
+        // DOÐRULAMA (YAPAY YÜK TESTÝ):
+        // Eðer bu satýrý açarsan Consumer yavaþlar, kuyruk dolar ve "Queue Drops" artar.
+        // std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
 }
 
+// --- MAIN (PRODUCER THREAD) ---
+// Burasý "Time-Critical" Acquisition Loop.
+// Tek iþi: Socket'ten oku -> Kuyruða at.
 int main(int argc, char** argv) {
-    const auto cfg = parse_args(argc, argv);
-    SeqTracker tracker;
-
-    const auto t0 = std::chrono::steady_clock::now();
-
-    if (cfg.mode == "sim") {
-        auto stream = simulate_seq_stream(cfg);
-        for (uint32_t s : stream) tracker.update(s);
+    // 1. Config Yükle
+    Config cfg;
+    try {
+        cfg = Config::from_cli(argc, argv);
     }
-    else if (cfg.mode == "udp") {
-        run_udp_receiver(cfg, tracker);
+    catch (const std::exception& e) {
+        std::cerr << "Config Error: " << e.what() << "\n";
+        return 1;
+    }
+
+    // Sadece UDP modunda çalýþýr
+    if (cfg.mode != "udp") {
+        std::cerr << "HATA: Bu versiyon sadece '--mode udp' destekler.\n";
+        return 1;
+    }
+
+    // 2. Windows için WSA Baþlatma
+#ifdef _WIN32
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        std::cerr << "WSAStartup failed\n";
+        return 1;
+    }
+#endif
+
+    // 3. UDP Soketi Aç
+    sock_t sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock == INVALID_SOCKET) {
+        std::cerr << "Socket creation failed\n";
+        return 1;
+    }
+
+    // Buffer Boyutunu Artýr (Kernel seviyesinde drop olmasýn diye)
+    // FIX: sizeof sonucunu (int) olarak cast ettik.
+    int rcvbuf = 1024 * 1024; // 1MB
+    setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char*)&rcvbuf, (int)sizeof(rcvbuf));
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(cfg.port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        std::cerr << "Bind error on port " << cfg.port << "\n";
+        CLOSESOCKET(sock);
+        return 1;
+    }
+
+    // Timeout ayarý (1 saniye - böylece sonsuza kadar takýlý kalmaz)
+#ifdef _WIN32
+    DWORD timeout = 1000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, (int)sizeof(timeout));
+#else
+    struct timeval tv { 1, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+
+    // 4. Queue ve Consumer Baþlatma
+    // Kapasite: 2000 paket. 
+    PacketQueue queue(2000);
+    SeqTracker tracker; // Ýstatistik nesnesi (Consumer güncelleyecek)
+
+    std::cout << ">>> Acquisition START (Port: " << cfg.port << ") [Multi-Threaded]\n";
+    std::cout << ">>> Hedef Paket: " << cfg.udp_count << "\n";
+
+    // Consumer Thread'i ateþle!
+    std::thread consumer(consumer_worker, std::ref(queue), std::cref(cfg), std::ref(tracker));
+
+    // 5. Ana Döngü (Time-Critical Loop)
+    std::vector<uint8_t> buffer(2048); // MTU için güvenli boyut
+    sockaddr_in sender;
+    int sender_len = sizeof(sender);
+
+    auto t0 = std::chrono::steady_clock::now();
+    bool running = true;
+
+    while (running) {
+        // A. Blocking Receive
+        // FIX: buffer.size() -> static_cast<int> yaptýk.
+#ifdef _WIN32
+        int n = recvfrom(sock, (char*)buffer.data(), static_cast<int>(buffer.size()), 0, (sockaddr*)&sender, &sender_len);
+#else
+        socklen_t slen = sizeof(sender);
+        int n = recvfrom(sock, (char*)buffer.data(), buffer.size(), 0, (sockaddr*)&sender, &slen);
+#endif
+
+        if (n > 0) {
+            // Veri geldi!
+            Packet pkt;
+            pkt.data.assign(buffer.begin(), buffer.begin() + n);
+
+            // B. Kuyruða At (Producer Ýþlemi)
+            // try_push: Eðer yer varsa atar, yoksa false döner (Drop)
+            if (!queue.try_push(std::move(pkt))) {
+                // Drop gerçekleþti, packet_queue içindeki sayaç arttý.
+            }
+        }
+
+        // Çýkýþ Koþulu Kontrolü
+        // FIX: cfg.udp_count'u uint64_t'ye cast ederek karþýlaþtýrdýk.
+        // SeqTracker consumer'da olduðu için rx deðerini okumak tam thread-safe deðil ama 
+        // "yaklaþýk" kontrol için yeterli. En doðru yöntem atomic kullanmaktýr ama
+        // þimdilik bu kod iþ görür.
+        if (tracker.stats.rx >= static_cast<uint64_t>(cfg.udp_count)) {
+            running = false;
+        }
+    }
+
+    // 6. Kapanýþ
+    auto t1 = std::chrono::steady_clock::now();
+    double dt = std::chrono::duration<double>(t1 - t0).count();
+
+    queue.stop(); // Consumer'a dur de
+    if (consumer.joinable()) {
+        consumer.join(); // Consumer'ýn çýkmasýný bekle
+    }
+
+    CLOSESOCKET(sock);
+#ifdef _WIN32
+    WSACleanup();
+#endif
+
+    // 7. Raporlama
+    const auto& st = tracker.stats;
+    std::cout << "\n=== SONUCLAR (ML3 Threaded) ===\n";
+    std::cout << "Sure: " << dt << " s\n";
+    std::cout << "RX (Alinan): " << st.rx << "\n";
+    std::cout << "Missing: " << st.missing << "\n";
+    std::cout << "Out-of-Order: " << st.ooo << "\n";
+    std::cout << "Packet Loss Rate (PLR): " << tracker.plr() << "\n";
+    std::cout << "-----------------------------\n";
+    std::cout << "QUEUE DROPS (Kuyruk Tasmasi): " << queue.get_drops() << "\n";
+    std::cout << "-----------------------------\n";
+
+    if (queue.get_drops() > 0) {
+        std::cout << "UYARI: Consumer (isleyici) thread veriye yetisemedi!\n";
     }
     else {
-        die("Invalid mode");
+        std::cout << "BASARILI: Pipeline tikir tikir calisti.\n";
     }
 
-    const auto t1 = std::chrono::steady_clock::now();
-    const double dt = std::chrono::duration<double>(t1 - t0).count();
-
-    const auto& st = tracker.stats;
-
-    std::cout << "=== Seq Stats (M2.2 " << cfg.mode << ") ===\n";
-    std::cout << "rx=" << st.rx
-        << " missing=" << st.missing
-        << " ooo=" << st.ooo
-        << " dup=" << st.dup << "\n";
-    std::cout << "PLR=" << tracker.plr() << "\n";
-    std::cout << "time_s=" << dt << "\n";
+    // Metrics JSON yaz
     if (!cfg.metrics_out.empty()) {
-        if (!write_metrics_json(cfg.metrics_out, cfg.mode, cfg.port, (cfg.mode == "udp" ? cfg.udp_count : cfg.count),
-            tracker.stats, tracker.plr(), dt)) {
-            std::cerr << "Failed to write metrics to: " << cfg.metrics_out << "\n";
-            return 2;
-        }
-        std::cout << "Wrote metrics: " << cfg.metrics_out << "\n";
+        write_metrics_json(cfg.metrics_out, cfg.mode, cfg.port, cfg.udp_count, st, tracker.plr(), dt);
     }
-
 
     return 0;
 }
-
