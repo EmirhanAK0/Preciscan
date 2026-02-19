@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 
-        std::vector<uint8_t> buffer(2048);
+        std::vector<uint8_t> buffer(100000);
         sockaddr_in sender;
         int sender_len = sizeof(sender);
 
