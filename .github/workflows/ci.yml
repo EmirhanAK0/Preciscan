@@ -1,20 +1,27 @@
-name: CI
+name: Preciscan Core CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  basic-check:
-    runs-on: ubuntu-latest
+  build-and-test:
+    name: Windows Build & Regression Test
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-      - name: List repository structure
-        run: |
-          echo "Repository structure:"
-          ls -R
+    - name: Configure CMake
+      run: cmake -B pc/build -S pc
+
+    - name: Build Project
+      run: cmake --build pc/build --config Release
+
+    - name: Run Pipeline Regression Test (Replay)
+      # Eğer bu testte paket düşerse (return 2), GitHub sana kırmızı çarpı verecek!
+      run: |
+        .\pc\build\Release\acquire_cli.exe --mode replay --replay-in tests\testdata\ideal_10k.bin
