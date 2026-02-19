@@ -4,7 +4,7 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
-#include <cstring> // memcpy için
+#include <cstring>
 
 // Platform baðýmsýz socket ayarlarý
 #ifdef _WIN32
@@ -23,44 +23,38 @@ using sock_t = int;
 #endif
 
 // Proje dosyalarý
-// Not: CMake bu dosyalarýn path'lerini görüyorsa doðrudan include edebilirsin.
-// Eðer hata alýrsan pathleri "../../core/config.h" gibi düzeltmen gerekebilir.
 #include "config.h"
 #include "seq_metrics.h"
-#include "packet_queue.h"    
+#include "spsc_ring_buffer.h"  // YENÝ: Lock-Free Buffer
 #include "metrics_writer.h"
 
 // --- CONSUMER THREAD (Veriyi Ýþleyen Ýþçi) ---
-// Bu fonksiyon ayrý bir thread'de çalýþýr.
-// Tek iþi: Kuyruktan paket al, analiz et.
-void consumer_worker(PacketQueue& queue, const Config& cfg, SeqTracker& tracker) {
+// Lock-free buffer'dan veri çeker.
+void consumer_worker(SPSCRingBuffer& queue, const Config& cfg, SeqTracker& tracker) {
     Packet pkt;
 
-    // queue.pop() fonksiyonu veri gelene kadar BLOKE OLUR (CPU harcamaz).
-    // queue.stop() çaðrýldýðýnda döngü false döner ve biter.
+    // pop() fonksiyonu veri gelene kadar döner (spin-wait/yield yapar).
+    // queue.stop() çaðrýldýðýnda ve kuyruk boþaldýðýnda false döner.
     while (queue.pop(pkt)) {
 
-        // 1. Sequence Numarasýný Çýkar (Protocol varsayýmý: Ýlk 4 byte = uint32 seq)
+        // 1. Sequence Numarasýný Çýkar (Ýlk 4 byte = uint32 seq)
         if (pkt.data.size() >= 4) {
             uint32_t net_seq;
             std::memcpy(&net_seq, pkt.data.data(), 4);
-            uint32_t seq = ntohl(net_seq); // Network order (Big Endian) -> Host order
+            uint32_t seq = ntohl(net_seq); // Network -> Host order
 
-            // Metrikleri güncelle (ooo, dup, loss hesabý)
+            // Metrikleri güncelle (ooo, dup, loss)
             tracker.update(seq);
         }
 
-        // 2. Diske Yazma (Ýleride buraya eklenecek)
-
         // DOÐRULAMA (YAPAY YÜK TESTÝ):
-        // Eðer bu satýrý açarsan Consumer yavaþlar, kuyruk dolar ve "Queue Drops" artar.
+        // Lock-free yapýnýn drop mekanizmasýný test etmek için burayý açabilirsin.
         // std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
 }
 
-// --- MAIN (PRODUCER THREAD) ---
-// Burasý "Time-Critical" Acquisition Loop.
-// Tek iþi: Socket'ten oku -> Kuyruða at.
+// --- MAIN (PRODUCER THREAD - ACQUISITION) ---
+// Sadece Socket'ten oku -> Lock-Free Kuyruða at. Asla bloke olmaz!
 int main(int argc, char** argv) {
     // 1. Config Yükle
     Config cfg;
@@ -72,13 +66,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Sadece UDP modunda çalýþýr
     if (cfg.mode != "udp") {
-        std::cerr << "HATA: Bu versiyon sadece '--mode udp' destekler.\n";
+        std::cerr << "HATA: ML4 sürümü sadece '--mode udp' destekler.\n";
         return 1;
     }
 
-    // 2. Windows için WSA Baþlatma
+    // 2. Windows WSA Baþlatma
 #ifdef _WIN32
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
@@ -89,13 +82,9 @@ int main(int argc, char** argv) {
 
     // 3. UDP Soketi Aç
     sock_t sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock == INVALID_SOCKET) {
-        std::cerr << "Socket creation failed\n";
-        return 1;
-    }
+    if (sock == INVALID_SOCKET) return 1;
 
-    // Buffer Boyutunu Artýr (Kernel seviyesinde drop olmasýn diye)
-    // FIX: sizeof sonucunu (int) olarak cast ettik.
+    // Kernel Receive Buffer'ý büyüt (Ýþletim sistemi paket düþürmesin)
     int rcvbuf = 1024 * 1024; // 1MB
     setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char*)&rcvbuf, (int)sizeof(rcvbuf));
 
@@ -110,7 +99,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Timeout ayarý (1 saniye - böylece sonsuza kadar takýlý kalmaz)
+    // Timeout (1 saniye)
 #ifdef _WIN32
     DWORD timeout = 1000;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, (int)sizeof(timeout));
@@ -119,19 +108,19 @@ int main(int argc, char** argv) {
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 
-    // 4. Queue ve Consumer Baþlatma
-    // Kapasite: 2000 paket. 
-    PacketQueue queue(2000);
-    SeqTracker tracker; // Ýstatistik nesnesi (Consumer güncelleyecek)
+    // 4. SPSC Lock-Free Queue ve Consumer Baþlatma
+    // Kapasite: 2000 paket. Allocation yapmaz, baþtan hafýzayý ayýrýr.
+    SPSCRingBuffer queue(2000);
+    SeqTracker tracker;
 
-    std::cout << ">>> Acquisition START (Port: " << cfg.port << ") [Multi-Threaded]\n";
+    std::cout << ">>> Acquisition START (Port: " << cfg.port << ") [ML4 Lock-Free SPSC]\n";
     std::cout << ">>> Hedef Paket: " << cfg.udp_count << "\n";
 
-    // Consumer Thread'i ateþle!
+    // Consumer Thread Baþlat
     std::thread consumer(consumer_worker, std::ref(queue), std::cref(cfg), std::ref(tracker));
 
-    // 5. Ana Döngü (Time-Critical Loop)
-    std::vector<uint8_t> buffer(2048); // MTU için güvenli boyut
+    // 5. Time-Critical Acquisition Loop
+    std::vector<uint8_t> buffer(2048);
     sockaddr_in sender;
     int sender_len = sizeof(sender);
 
@@ -139,8 +128,7 @@ int main(int argc, char** argv) {
     bool running = true;
 
     while (running) {
-        // A. Blocking Receive
-        // FIX: buffer.size() -> static_cast<int> yaptýk.
+        // A. Ýþletim Sisteminden Oku
 #ifdef _WIN32
         int n = recvfrom(sock, (char*)buffer.data(), static_cast<int>(buffer.size()), 0, (sockaddr*)&sender, &sender_len);
 #else
@@ -149,34 +137,27 @@ int main(int argc, char** argv) {
 #endif
 
         if (n > 0) {
-            // Veri geldi!
             Packet pkt;
             pkt.data.assign(buffer.begin(), buffer.begin() + n);
 
-            // B. Kuyruða At (Producer Ýþlemi)
-            // try_push: Eðer yer varsa atar, yoksa false döner (Drop)
-            if (!queue.try_push(std::move(pkt))) {
-                // Drop gerçekleþti, packet_queue içindeki sayaç arttý.
-            }
+            // B. Kuyruða At (Producer)
+            // Kilit yok! try_push anýnda döner. Doluysa false (drop) döner.
+            queue.try_push(std::move(pkt));
         }
 
         // Çýkýþ Koþulu Kontrolü
-        // FIX: cfg.udp_count'u uint64_t'ye cast ederek karþýlaþtýrdýk.
-        // SeqTracker consumer'da olduðu için rx deðerini okumak tam thread-safe deðil ama 
-        // "yaklaþýk" kontrol için yeterli. En doðru yöntem atomic kullanmaktýr ama
-        // þimdilik bu kod iþ görür.
         if (tracker.stats.rx >= static_cast<uint64_t>(cfg.udp_count)) {
             running = false;
         }
     }
 
-    // 6. Kapanýþ
+    // 6. Kapanýþ ve Temizlik
     auto t1 = std::chrono::steady_clock::now();
     double dt = std::chrono::duration<double>(t1 - t0).count();
 
-    queue.stop(); // Consumer'a dur de
+    queue.stop(); // Consumer'a döngüyü kýr emri ver
     if (consumer.joinable()) {
-        consumer.join(); // Consumer'ýn çýkmasýný bekle
+        consumer.join();
     }
 
     CLOSESOCKET(sock);
@@ -186,24 +167,23 @@ int main(int argc, char** argv) {
 
     // 7. Raporlama
     const auto& st = tracker.stats;
-    std::cout << "\n=== SONUCLAR (ML3 Threaded) ===\n";
+    std::cout << "\n=== SONUCLAR (ML4 Lock-Free SPSC) ===\n";
     std::cout << "Sure: " << dt << " s\n";
     std::cout << "RX (Alinan): " << st.rx << "\n";
     std::cout << "Missing: " << st.missing << "\n";
     std::cout << "Out-of-Order: " << st.ooo << "\n";
     std::cout << "Packet Loss Rate (PLR): " << tracker.plr() << "\n";
     std::cout << "-----------------------------\n";
-    std::cout << "QUEUE DROPS (Kuyruk Tasmasi): " << queue.get_drops() << "\n";
+    std::cout << "RING BUFFER DROPS: " << queue.get_drops() << "\n";
     std::cout << "-----------------------------\n";
 
     if (queue.get_drops() > 0) {
-        std::cout << "UYARI: Consumer (isleyici) thread veriye yetisemedi!\n";
+        std::cout << "UYARI: Consumer yetisemedi, " << queue.get_drops() << " paket drop edildi (Drop-Newest).\n";
     }
     else {
-        std::cout << "BASARILI: Pipeline tikir tikir calisti.\n";
+        std::cout << "BASARILI: SPSC Ring Buffer pürüzsüz calisti.\n";
     }
 
-    // Metrics JSON yaz
     if (!cfg.metrics_out.empty()) {
         write_metrics_json(cfg.metrics_out, cfg.mode, cfg.port, cfg.udp_count, st, tracker.plr(), dt);
     }
