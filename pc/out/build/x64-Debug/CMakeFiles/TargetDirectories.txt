@@ -1,0 +1,4 @@
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/x64-Debug/CMakeFiles/acquire_cli.dir
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/x64-Debug/CMakeFiles/udp_sender_sim.dir
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/x64-Debug/CMakeFiles/edit_cache.dir
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir

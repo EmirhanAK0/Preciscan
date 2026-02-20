@@ -1,0 +1,4 @@
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/CMakeFiles/acquire_cli.dir
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/CMakeFiles/udp_sender_sim.dir
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/out/build/CMakeFiles/ZERO_CHECK.dir
