@@ -11,7 +11,8 @@ struct McuFixedPacket {
 };
 #pragma pack(pop)
 
-McuListener::McuListener(int port) : m_port(port), m_running(false) {}
+McuListener::McuListener(int port, IDataSink* sink)
+    : m_port(port), m_sink(sink), m_running(false) {}
 
 McuListener::~McuListener() {
     stop();
@@ -46,9 +47,8 @@ void McuListener::listenLoop() {
         return;
     }
 
-    sockaddr_in addr;
+    sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    // [DUZELTME C4244] int -> u_short explicit cast
     addr.sin_port = htons(static_cast<u_short>(m_port));
     addr.sin_addr.s_addr = INADDR_ANY;
 
@@ -63,22 +63,32 @@ void McuListener::listenLoop() {
 
     char buffer[1024];
     while (m_running) {
-        timeval tv;
+        timeval tv{};
         tv.tv_sec = 0;
-        tv.tv_usec = 100000;
+        tv.tv_usec = 100000; // 100ms
 
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(sock, &readfds);
 
-        // [DUZELTME C4244] SOCKET -> int explicit cast (Windows select() gereksinimi)
         if (select(static_cast<int>(sock) + 1, &readfds, NULL, NULL, &tv) > 0) {
-            int bytes = recv(sock, buffer, 1024, 0);
+            int bytes = recv(sock, buffer, sizeof(buffer), 0);
             if (bytes >= (int)sizeof(McuFixedPacket)) {
                 McuFixedPacket pkt;
                 std::memcpy(&pkt, buffer, sizeof(McuFixedPacket));
-                std::cout << "\r[MCU] Tetik: " << pkt.trigger_seq
-                          << " Y: " << pkt.y_position << " mm    " << std::flush;
+
+                if (m_sink) {
+                    // [DUZELTME] Veriyi sink'e ilet — stdout'a yazmak sink'in gorevi
+                    m_sink->on_packet(
+                        reinterpret_cast<const uint8_t*>(buffer),
+                        (size_t)bytes,
+                        0  // timestamp_ns: Faz 3'te aktif edilecek
+                    );
+                } else {
+                    // Sink yoksa minimal log (varsayilan davranis)
+                    std::cout << "\r[MCU] Tetik: " << pkt.trigger_seq
+                              << " Y: " << pkt.y_position << " mm    " << std::flush;
+                }
             }
         }
     }
