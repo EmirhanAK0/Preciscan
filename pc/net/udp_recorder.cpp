@@ -1,19 +1,7 @@
-#include "udp_recorder.h"
+﻿#include "udp_recorder.h"
+#include "udp_socket.h"
 #include "../core/seq_metrics.h"
 #include <fstream>
-
-#ifdef _WIN32
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  #pragma comment(lib, "Ws2_32.lib")
-#else
-  #include <arpa/inet.h>
-  #include <netinet/in.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
-#endif
-
-static void set_error(std::string& e, const char* msg) { e = msg; }
 
 bool udp_record_seq_stream(
     int port,
@@ -23,59 +11,22 @@ bool udp_record_seq_stream(
     std::string& error
 ) {
     std::ofstream out(out_path, std::ios::binary | std::ios::trunc);
-    if (!out) { set_error(error, "failed to open output file"); return false; }
+    if (!out) { error = "failed to open output file"; return false; }
 
-#ifdef _WIN32
-    WSADATA wsa{};
-    if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) { set_error(error, "WSAStartup failed"); return false; }
-#endif
-
-    int sock = (int)socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) {
-        set_error(error, "socket() failed");
-#ifdef _WIN32
-        WSACleanup();
-#endif
-        return false;
-    }
-
-    sockaddr_in local{};
-    local.sin_family = AF_INET;
-    local.sin_port = htons((uint16_t)port);
-    local.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(sock, (sockaddr*)&local, sizeof(local)) != 0) {
-        set_error(error, "bind() failed (port in use or blocked)");
-#ifdef _WIN32
-        closesocket(sock); WSACleanup();
-#else
-        close(sock);
-#endif
-        return false;
-    }
+    UdpSocket sock(port, error);
+    if (!sock.is_open()) return false;
 
     uint32_t got = 0;
     while (got < target_count) {
         uint32_t net_seq = 0;
-        int recvd = recvfrom(sock, (char*)&net_seq, sizeof(net_seq), 0, nullptr, nullptr);
+        int recvd = sock.recv(&net_seq, sizeof(net_seq));
         if (recvd == (int)sizeof(net_seq)) {
-            // write raw bytes exactly as received
             out.write(reinterpret_cast<const char*>(&net_seq), sizeof(net_seq));
-            if (!out) { set_error(error, "failed while writing output file"); break; }
-
-            uint32_t seq = ntohl(net_seq);
-            tracker.update(seq);
+            if (!out) { error = "failed while writing output file"; break; }
+            tracker.update(ntohl(net_seq));
             got++;
         }
     }
 
-#ifdef _WIN32
-    closesocket(sock);
-    WSACleanup();
-#else
-    close(sock);
-#endif
-
-    if (got != target_count) return false;
-    return true;
+    return got == target_count;
 }
