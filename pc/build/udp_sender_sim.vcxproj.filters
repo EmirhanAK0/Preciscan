@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\Emirhan\OneDrive - Yildiz Technical University\Masaüstü\m2lab proje\Preciscan\pc\tools\udp_sender_sim\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Emirhan\OneDrive - Yildiz Technical University\Masaüstü\m2lab proje\Preciscan\pc\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{ECCCB586-C045-3DF1-97C1-1E865B79C853}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
