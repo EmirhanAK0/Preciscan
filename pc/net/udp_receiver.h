@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <string>
 
-class SeqTracker;
+struct SeqTracker;
 
 // Returns true on success, false on failure (error filled)
 bool udp_receive_seq_stream(

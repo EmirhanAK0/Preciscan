@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <string>
 
-class SeqTracker;
+struct SeqTracker;
 
 // Reads raw file of uint32 (network byte order) and updates tracker.
 // Returns true on success, false on failure (error filled).

@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <string>
 
-class SeqTracker;
+struct SeqTracker;
 
 // Record UDP seq packets (4 bytes each) into a binary file (raw bytes).
 // Returns true on success, false on failure (error filled).
