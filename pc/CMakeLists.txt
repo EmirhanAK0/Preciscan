@@ -46,3 +46,7 @@ target_compile_options(acquire_cli PRIVATE /W4)
 add_executable(udp_sender_sim tools/udp_sender_sim/main.cpp)
 target_link_libraries(udp_sender_sim PRIVATE ws2_32)
 target_compile_options(udp_sender_sim PRIVATE /W4)
+
+# --- Testler ---
+enable_testing()
+add_subdirectory(tests)

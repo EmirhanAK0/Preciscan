@@ -1,30 +1,27 @@
-cmake_minimum_required(VERSION 3.20)
-project(preciscan_pc LANGUAGES CXX)
+﻿include(FetchContent)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_executable(acquire_cli
-    tools/acquire_cli/main.cpp
-    core/seq_metrics.cpp
-    core/metrics_writer.cpp
-    net/udp_receiver.cpp
-    core/config.cpp
-    net/udp_recorder.cpp
-    io/replay_reader.cpp
-
-
-
-
+# Catch2'yi internetten indir (internet olmadan build edilemez, bir kerelik)
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.5.2
 )
-target_include_directories(acquire_cli PRIVATE core net io)
+FetchContent_MakeAvailable(Catch2)
 
-add_executable(udp_sender_sim
-    tools/udp_sender_sim/main.cpp
+# Test executable
+add_executable(preciscan_tests
+    test_seq_tracker.cpp
 )
 
-# Windows sockets (Winsock)
-if (WIN32)
-  target_link_libraries(acquire_cli PRIVATE ws2_32)
-  target_link_libraries(udp_sender_sim PRIVATE ws2_32)
-endif()
+target_link_libraries(preciscan_tests
+    PRIVATE
+    preciscan_core
+    Catch2::Catch2WithMain
+)
+
+target_compile_options(preciscan_tests PRIVATE /W4)
+
+# CTest entegrasyonu
+include(CTest)
+include(Catch)
+catch_discover_tests(preciscan_tests)
