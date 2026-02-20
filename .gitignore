@@ -1,0 +1,27 @@
+﻿# Build directories
+build/
+pc/build/
+pc/out/
+out/
+
+# VS files
+.vs/
+.vscode/
+*.user
+
+# CMake cache
+CMakeCache.txt
+CMakeFiles/
+
+# Binary outputs
+*.exe
+*.lib
+*.dll
+*.obj
+*.pdb
+
+# Runtime outputs
+runs/
+*.bin
+metrics_*.json
+udp_raw.bin
