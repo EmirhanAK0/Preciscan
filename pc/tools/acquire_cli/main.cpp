@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
 #endif
 
     // SPSC Lock-Free Queue ve Consumer Baþlatma
-    SPSCRingBuffer queue(2000);
+    SPSCRingBuffer queue(100000);
     SeqTracker tracker;
 
     std::cout << ">>> Acquisition START [Mod: " << cfg.mode << "]\n";
