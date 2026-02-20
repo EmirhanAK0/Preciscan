@@ -1,4 +1,4 @@
-name: Preciscan Core CI
+﻿name: Preciscan Core CI
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Windows Build & Regression Test
+    name: Windows Build & Test
     runs-on: windows-latest
 
     steps:
@@ -21,7 +21,5 @@ jobs:
     - name: Build Project
       run: cmake --build pc/build --config Release
 
-    - name: Run Pipeline Regression Test (Replay)
-      # Eğer bu testte paket düşerse (return 2), GitHub sana kırmızı çarpı verecek!
-      run: |
-        .\pc\build\Release\acquire_cli.exe --mode replay --replay-in tests\testdata\ideal_10k.bin
+    - name: Run Unit Tests
+      run: .\pc\build\tests\Release\preciscan_tests.exe --reporter console
