@@ -1,4 +1,9 @@
 ﻿#pragma once
+// C4324: alignas(64) nedeniyle struct sonu dolduruldu -- kasitli optimizasyon.
+// head_ ve tail_ farkli cache line'larda olmali (false sharing onleme).
+#ifdef _MSC_VER
+#pragma warning(disable: 4324)
+#endif
 #include "../core/packet.h"
 #include <atomic>
 #include <vector>
