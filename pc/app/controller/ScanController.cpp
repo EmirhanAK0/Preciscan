@@ -69,18 +69,7 @@ void ScanController::connectLaserSim(const QString& stlPath) {
 
     m_simWorker = new sim::LaserSimWorker(std::move(mesh), p, this);
     
-    connect(m_simWorker, &sim::LaserSimWorker::profileReady, this, [this](float theta, const QVector<QPointF>& sensorData){
-        QVector<QPointF> reconstructed;
-        reconstructed.reserve(sensorData.size());
-        for (const auto& p : sensorData) {
-            float z = p.x(); 
-            float d = p.y(); 
-            float r = m_dOffset - d; 
-            if (r > 0.05f) reconstructed.push_back(QPointF(r, z));
-        }
-        if (!reconstructed.isEmpty()) emit simProfileReceived(theta, reconstructed);
-    });
-
+    connect(m_simWorker, &sim::LaserSimWorker::profileReady, this, &ScanController::simProfileReceived);
     connect(m_simWorker, &sim::LaserSimWorker::progressUpdated, this, &ScanController::simProgressUpdated);
     connect(m_simWorker, &sim::LaserSimWorker::scanComplete, this, [this](const QVector<QVector3D>& cloud){
         m_lastCloud = cloud;
