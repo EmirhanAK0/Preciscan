@@ -1,16 +1,25 @@
 ﻿#include "laser_manager.h"
 #include <iostream>
 
-// Lazerden veri geldiginde tetiklenecek olan Callback (Su an sadece izliyoruz)
-// [NOT] pData ve pUserData Faz 3'te SPSCRingBuffer'a baglanacak
+// RT Callback — Donanim SDK'si bu fonksiyonu kendi thread'inden cagirir.
+// KURAL: Burada hic bir mutex alma, heap allocate, I/O yazma yapma!
+// Veri, pUserData uzerinden IDataSink'e iletilir; ne yapilacagina sink karar verir.
 void _stdcall GlobalLaserCallback(const unsigned char* pData, unsigned int nSize, void* pUserData) {
-    (void)pData;     // [DUZELTME C4100] Kullanilmayan parametre uyarisi kapatildi
-    (void)pUserData; // [DUZELTME C4100] Kullanilmayan parametre uyarisi kapatildi
-    std::cout << "\r[LAZER] Profil Yakalandi: " << nSize << " byte" << std::flush;
+    IDataSink* sink = static_cast<IDataSink*>(pUserData);
+    if (sink) {
+        // Lock-free: sink implementasyonu SPSCRingBuffer::try_push cagiracak
+        sink->on_packet(pData, static_cast<size_t>(nSize), 0 /* ts_ns: Faz 3 */);
+    } else {
+        // Sink baglanmamis: minimal durum mesaji (development only)
+        static unsigned int s_count = 0;
+        if (++s_count % 100 == 0) { // Her 100 profilde bir log — RT kasasini gozet
+            std::cout << "\r[LAZER] " << s_count << " profil alindi, sink bagli degil" << std::flush;
+        }
+    }
 }
 
-LaserManager::LaserManager(const std::string& dllPath)
-    : m_dllPath(dllPath), m_llt(nullptr), m_connected(false) {}
+LaserManager::LaserManager(const std::string& dllPath, IDataSink* sink)
+    : m_dllPath(dllPath), m_llt(nullptr), m_sink(sink), m_connected(false) {}
 
 LaserManager::~LaserManager() {
     stopAcquisition();
@@ -39,9 +48,12 @@ bool LaserManager::connect() {
 
 void LaserManager::startAcquisition() {
     if (m_connected) {
-        m_llt->RegisterCallback(STD_CALL, (void*)GlobalLaserCallback, nullptr);
+        // m_sink, pUserData olarak callback'e geciliyor
+        // Boylece GlobalLaserCallback icinde IDataSink::on_packet cagrilabilir
+        m_llt->RegisterCallback(STD_CALL, (void*)GlobalLaserCallback, static_cast<void*>(m_sink));
         m_llt->TransferProfiles(NORMAL_TRANSFER, 1);
-        std::cout << "[LAZER] Veri akisi baslatildi.\n";
+        std::cout << "[LAZER] Veri akisi baslatildi. Sink: "
+                  << (m_sink ? "bagli" : "yok (log modu)") << "\n";
     }
 }
 

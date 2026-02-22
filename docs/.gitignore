@@ -1,38 +1,29 @@
-# Build folders
+# Build folders 
+pc/out/
 build/
-out/
 bin/
 dist/
 
-# CMake
+# CMake 
 CMakeFiles/
 CMakeCache.txt
+cmake_install.cmake
+*.cmake
 cmake-build-*/
 
-# Visual Studio
+# Visual Studio / IDE 
 .vs/
+.vscode/
 *.vcxproj.user
 *.suo
+*.db
+*.opendb
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.env
-venv/
-
-# Logs
+# Logs and Temporary
 *.log
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.idea/
-.vscode/
-
-# Temporary files
 *.tmp
 *.swp
+
+# OS Files
+.DS_Store
+Thumbs.db

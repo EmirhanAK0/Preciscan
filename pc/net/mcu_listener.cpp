@@ -77,15 +77,17 @@ void McuListener::listenLoop() {
                 McuFixedPacket pkt;
                 std::memcpy(&pkt, buffer, sizeof(McuFixedPacket));
 
+                if (m_packetCb) {
+                    m_packetCb(pkt.trigger_seq, pkt.y_position);
+                }
                 if (m_sink) {
-                    // [DUZELTME] Veriyi sink'e ilet — stdout'a yazmak sink'in gorevi
                     m_sink->on_packet(
                         reinterpret_cast<const uint8_t*>(buffer),
                         (size_t)bytes,
-                        0  // timestamp_ns: Faz 3'te aktif edilecek
+                        0
                     );
-                } else {
-                    // Sink yoksa minimal log (varsayilan davranis)
+                } else if (!m_packetCb) {
+                    // Hic sink yok: minimal konsol log
                     std::cout << "\r[MCU] Tetik: " << pkt.trigger_seq
                               << " Y: " << pkt.y_position << " mm    " << std::flush;
                 }
