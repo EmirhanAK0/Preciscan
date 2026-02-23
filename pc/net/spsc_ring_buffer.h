@@ -31,6 +31,16 @@ public:
         return true;
     }
 
+    bool try_pop(Packet& out_pkt) {
+        const size_t current_tail = tail_.load(std::memory_order_relaxed);
+        if (current_tail == head_.load(std::memory_order_acquire)) {
+            return false; // Kuyruk bos — hic bloklanma
+        }
+        out_pkt = std::move(buffer_[current_tail]);
+        tail_.store((current_tail + 1) % capacity_, std::memory_order_release);
+        return true;
+    }
+
     bool pop(Packet& out_pkt) {
         while (true) {
             const size_t current_tail = tail_.load(std::memory_order_relaxed);

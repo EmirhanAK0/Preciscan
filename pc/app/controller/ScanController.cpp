@@ -6,13 +6,19 @@
 #include "../../sim/laser_sim_worker.h"
 #include "../../io/stl_loader.h"
 #include "../../io/ply_writer.h"
+#include "../../core/packet.h"
 #include <QDebug>
 #include <QFileInfo>
+#include <cstring>
 
 ScanController::ScanController(McuListener* mcu, LaserManager* laser, 
                                SPSCRingBuffer* ring, QObject* parent)
     : QObject(parent), m_mcu(mcu), m_laser(laser), m_ring(ring) 
 {
+    // Hardware consumer timer (non-blocking, UI-thread safe)
+    m_hwTimer = new QTimer(this);
+    m_hwTimer->setInterval(0); // Process as fast as possible (event loop idle)
+    connect(m_hwTimer, &QTimer::timeout, this, &ScanController::consumeHardwarePackets);
 }
 
 ScanController::~ScanController() {
@@ -25,7 +31,10 @@ ScanController::~ScanController() {
 
 void ScanController::connectMcu() { emit mcuConnectionChanged(true); }
 void ScanController::disconnectMcu() { emit mcuConnectionChanged(false); }
-void ScanController::connectLaser() { emit laserConnectionChanged(true); }
+void ScanController::connectLaser() {
+    emit laserConnectionChanged(true);
+    emit logMessage("OK", "Lazer baglandi (HW modu).");
+}
 void ScanController::connectLaserSim(const QString& stlPath) {
     if (m_scanning) return;
     
@@ -71,9 +80,9 @@ void ScanController::connectLaserSim(const QString& stlPath) {
         QVector<QPointF> reconstructed;
         reconstructed.reserve(sensorData.size());
         for (const auto& p : sensorData) {
-            float heightZ = p.x(); // Height (X from sensor)
-            float distD = p.y();   // Distance (Z from sensor)
-            float radiusR = m_dOffset - distD; // r = D - d
+            float heightZ = p.x();
+            float distD = p.y();
+            float radiusR = m_dOffset - distD;
             if (radiusR > 0.05f) {
                 reconstructed.push_back(QPointF(radiusR, heightZ));
             }
@@ -97,7 +106,13 @@ void ScanController::startScan() {
     emit requestClearVisualizer();
     m_scanning = true;
     m_lastCloud.clear();
-    if (m_isSimMode && m_simWorker) m_simWorker->start();
+    m_hwAngle = 0.0f;
+    if (m_isSimMode && m_simWorker) {
+        m_simWorker->start();
+    } else if (m_ring) {
+        // Real hardware: start the QTimer consumer
+        m_hwTimer->start();
+    }
     emit scanStarted();
 }
 
@@ -105,7 +120,55 @@ void ScanController::stopScan() {
     if (!m_scanning) return;
     m_scanning = false;
     if (m_isSimMode && m_simWorker) m_simWorker->stop();
+    m_hwTimer->stop();
     emit scanStopped();
+}
+
+// -------------------------------------------------------------------
+// Real hardware packet consumer — runs on UI event loop (non-blocking)
+// -------------------------------------------------------------------
+// LLT SDK ham paketi:
+//   Her profil, birden cok uint16_t Y-mesafe değeri içerir.
+//   Her uint16_t = mesafe değeri (ham). 
+//   Her örnek, belirli bir piksel/irtifa pozisyonunu temsil eder.
+//   Piksel başı Z aralığı sensör modeline göre değişir; 
+//   bu basit versiyonda lineer dağılım varsayıyoruz (0..22 mm).
+void ScanController::consumeHardwarePackets() {
+    if (!m_ring || !m_scanning) return;
+
+    static constexpr int MAX_PER_TICK = 8; // Max 8 paket per event loop tick
+    Packet pkt;
+    int processed = 0;
+
+    while (processed < MAX_PER_TICK && m_ring->try_pop(pkt)) {
+        ++processed;
+        const size_t sz = pkt.data.size();
+        if (sz < 4) continue;
+
+        // LLT SDK: profil verisi uint16_t dizisi olarak gelir
+        // Her uint16_t = tek bir nokta. Birim: 1/100 mm (0.01 mm)
+        const uint16_t* samples = reinterpret_cast<const uint16_t*>(pkt.data.data());
+        const int sampleCount = static_cast<int>(sz / sizeof(uint16_t));
+        if (sampleCount < 1) continue;
+
+        QVector<QPointF> profile;
+        profile.reserve(sampleCount);
+
+        for (int i = 0; i < sampleCount; ++i) {
+            float dist_mm = samples[i] * 0.01f;        // 0.01 mm/LSB
+            float height_mm = (float)i * 22.0f / sampleCount; // lineer 0-22 mm
+            
+            if (dist_mm < 0.5f || dist_mm > m_dOffset) continue; // Geçersiz
+            profile.push_back(QPointF(height_mm, dist_mm));
+        }
+
+        if (!profile.isEmpty()) {
+            emit simProfileReceived(m_hwAngle, profile);
+            // Bir sonraki açıya ilerle
+            m_hwAngle += m_resolution;
+            if (m_hwAngle >= 360.0f) m_hwAngle = 0.0f;
+        }
+    }
 }
 
 void ScanController::saveCurrentScan(const QString& path) {
