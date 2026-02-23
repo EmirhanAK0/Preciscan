@@ -5,18 +5,18 @@
 
 class LaserManager {
 public:
-    // sink: profil verisi geldiginde nereye iletilecek (nullptr = sadece log)
-    // Lifetime: sink, LaserManager'dan daha uzun yasasin
     LaserManager(const std::string& dllPath = "LLT.dll", IDataSink* sink = nullptr);
     ~LaserManager();
     bool init();
-    bool connect();
+    bool connect();       // Otomatik interface/index dener
     void startAcquisition();
     void stopAcquisition();
+    std::string getLastError() const { return m_lastError; }
 
 private:
     std::string m_dllPath;
+    std::string m_lastError;
     CInterfaceLLT* m_llt;
-    IDataSink* m_sink;   // Sahiplik yok — disaridan verilir, disarida yonetilir
+    IDataSink* m_sink;
     bool m_connected;
 };

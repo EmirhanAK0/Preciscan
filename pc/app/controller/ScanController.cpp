@@ -41,7 +41,8 @@ void ScanController::connectLaser() {
         return;
     }
     if (!m_laser->connect()) {
-        emit logMessage("ERR", "Lazere baglanilamadi! Ethernet/USB kontrolü yapiniz.");
+        emit logMessage("ERR", QString("Lazere baglanilamadi! Detay: %1")
+            .arg(QString::fromStdString(m_laser->getLastError())));
         return;
     }
     m_laser->startAcquisition();
