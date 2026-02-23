@@ -144,46 +144,39 @@ void ScanController::stopScan() {
 }
 
 // -------------------------------------------------------------------
-// Real hardware packet consumer — runs on UI event loop (non-blocking)
+// Real hardware consumer — SDK ConvertProfile2Values ile dogruca mm
 // -------------------------------------------------------------------
-// LLT SDK ham paketi:
-//   Her profil, birden cok uint16_t Y-mesafe değeri içerir.
-//   Her uint16_t = mesafe değeri (ham). 
-//   Her örnek, belirli bir piksel/irtifa pozisyonunu temsil eder.
-//   Piksel başı Z aralığı sensör modeline göre değişir; 
-//   bu basit versiyonda lineer dağılım varsayıyoruz (0..22 mm).
 void ScanController::consumeHardwarePackets() {
-    if (!m_ring || !m_scanning) return;
+    if (!m_ring || !m_scanning || !m_laser) return;
 
-    static constexpr int MAX_PER_TICK = 8; // Max 8 paket per event loop tick
+    static constexpr int MAX_PER_TICK = 4; // UI kasmasın
     Packet pkt;
     int processed = 0;
 
+    static std::vector<double> vX, vZ;  // static: her tick'te re-alloc yok
+
     while (processed < MAX_PER_TICK && m_ring->try_pop(pkt)) {
         ++processed;
-        const size_t sz = pkt.data.size();
-        if (sz < 4) continue;
+        if (pkt.data.empty()) continue;
 
-        // LLT SDK: profil verisi uint16_t dizisi olarak gelir
-        // Her uint16_t = tek bir nokta. Birim: 1/100 mm (0.01 mm)
-        const uint16_t* samples = reinterpret_cast<const uint16_t*>(pkt.data.data());
-        const int sampleCount = static_cast<int>(sz / sizeof(uint16_t));
-        if (sampleCount < 1) continue;
+        // SDK ornegi gibi: ConvertProfile2Values → mm X/Z
+        bool ok = m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ);
+        if (!ok) continue;
 
+        const unsigned int res = m_laser->resolution();
         QVector<QPointF> profile;
-        profile.reserve(sampleCount);
+        profile.reserve(static_cast<int>(res));
 
-        for (int i = 0; i < sampleCount; ++i) {
-            float dist_mm = samples[i] * 0.01f;        // 0.01 mm/LSB
-            float height_mm = (float)i * 22.0f / sampleCount; // lineer 0-22 mm
-            
-            if (dist_mm < 0.5f || dist_mm > m_dOffset) continue; // Geçersiz
-            profile.push_back(QPointF(height_mm, dist_mm));
+        for (unsigned int i = 0; i < res; ++i) {
+            double x = vX[i]; // konum (mm) — sensörde yatay eksen
+            double z = vZ[i]; // mesafe (mm) — sensörde derin eksen
+            if (x == 0.0 && z == 0.0) continue; // gecersiz nokta
+            // Profil widget: QPointF(height_mm, dist_mm)
+            profile.push_back(QPointF(x, z));
         }
 
         if (!profile.isEmpty()) {
             emit simProfileReceived(m_hwAngle, profile);
-            // Bir sonraki açıya ilerle
             m_hwAngle += m_resolution;
             if (m_hwAngle >= 360.0f) m_hwAngle = 0.0f;
         }
