@@ -5,6 +5,7 @@
 #include <QVector3D>
 #include <QVector>
 #include <QString>
+#include <QTimer>
 
 class McuListener;
 class LaserManager;
@@ -58,6 +59,9 @@ signals:
     void meshLoaded(const QVector<QVector3D>& triangles);
     void logMessage(const QString& level, const QString& msg);
 
+private slots:
+    void consumeHardwarePackets(); // QTimer consumer for real laser
+
 private:
     McuListener*    m_mcu;
     LaserManager*   m_laser;
@@ -70,6 +74,10 @@ private:
     float m_resolution{1.0f};
     float m_rps{10.0f};
     QVector<QVector3D> m_lastCloud;
+
+    // Hardware consumer
+    QTimer* m_hwTimer{nullptr};
+    float m_hwAngle{0.0f}; // current rotation angle for HW mode
 
     std::atomic<bool> m_mcuConnected{false};
     std::atomic<bool> m_laserConnected{false};
