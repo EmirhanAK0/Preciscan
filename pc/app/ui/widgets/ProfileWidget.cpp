@@ -12,9 +12,14 @@ ProfileWidget::ProfileWidget(QWidget* parent) : QWidget(parent) {
 void ProfileWidget::updateProfile(float theta_deg, const QVector<QPointF>& profile) {
     QMutexLocker lk(&m_mutex);
 
-    // Max dist hesapla
-    for (const auto& p : profile)
-        if (p.y() > m_maxDist) m_maxDist = p.y();
+    for (const auto& p : profile) {
+        float h = (float)p.x();
+        float d = (float)p.y();
+        if (h < m_minHeight) m_minHeight = h;
+        if (h > m_maxHeight) m_maxHeight = h;
+        if (d < m_minDist)   m_minDist   = d;
+        if (d > m_maxDist)   m_maxDist   = d;
+    }
 
     m_current = profile;
     m_currentTheta = theta_deg;
@@ -30,7 +35,8 @@ void ProfileWidget::clear() {
     QMutexLocker lk(&m_mutex);
     m_current.clear();
     m_history.clear();
-    m_maxDist = 100.0f;
+    m_minHeight =  1e9f;  m_maxHeight = -1e9f;
+    m_minDist   =  1e9f;  m_maxDist   = -1e9f;
     update();
 }
 
@@ -44,9 +50,13 @@ void ProfileWidget::computePlotArea(int w, int h) {
 }
 
 QPointF ProfileWidget::toScreen(float height, float dist) const {
-    float nx = height / m_maxHeight;
-    float ny = dist / m_maxDist;
-    float sx = m_plotArea.left() + nx * m_plotArea.width();
+    float hRange = m_maxHeight - m_minHeight;
+    float dRange = m_maxDist   - m_minDist;
+    if (hRange < 0.1f) hRange = 1.0f;
+    if (dRange < 0.1f) dRange = 1.0f;
+    float nx = (height - m_minHeight) / hRange;
+    float ny = (dist   - m_minDist)   / dRange;
+    float sx = m_plotArea.left()   + nx * m_plotArea.width();
     float sy = m_plotArea.bottom() - ny * m_plotArea.height();
     return { sx, sy };
 }
@@ -80,18 +90,18 @@ void ProfileWidget::paintEvent(QPaintEvent*) {
     p.setPen(QColor("#555"));
     QFont font = p.font(); font.setPointSize(7); p.setFont(font);
 
-    // X ekseni: Height 0..22mm
+    // X ekseni: Height min..max
     for (int i = 0; i <= 5; ++i) {
-        float h = i * m_maxHeight / 5.0f;
-        QPointF sp = toScreen(h, 0.0f);
+        float h = m_minHeight + i * (m_maxHeight - m_minHeight) / 5.0f;
+        QPointF sp = toScreen(h, m_minDist);
         p.drawText(QRectF(sp.x() - 12, m_plotArea.bottom() + 4, 24, 14),
                    Qt::AlignCenter, QString::number((int)h));
     }
 
-    // Y ekseni: Distance 0..maxDist
+    // Y ekseni: Distance min..max
     for (int i = 0; i <= 5; ++i) {
-        float d = i * m_maxDist / 5.0f;
-        QPointF sp = toScreen(0.0f, d);
+        float d = m_minDist + i * (m_maxDist - m_minDist) / 5.0f;
+        QPointF sp = toScreen(m_minHeight, d);
         p.drawText(QRectF(2, sp.y() - 7, m_plotArea.left() - 4, 14),
                    Qt::AlignRight | Qt::AlignVCenter, QString::number((int)d));
     }
