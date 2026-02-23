@@ -33,9 +33,11 @@ private:
     QVector<QPointF> m_current;
     float m_currentTheta = 0.0f;
 
-    // Eksen sınırları
-    float m_maxDist = 100.0f;
-    float m_maxHeight = 22.0f;
+    // Eksen sınırları — gerçek veriye göre otomatik güncellenir
+    float m_minHeight =  1e9f;
+    float m_maxHeight = -1e9f;
+    float m_minDist   =  1e9f;
+    float m_maxDist   = -1e9f;
 
     QMutex m_mutex;
 
