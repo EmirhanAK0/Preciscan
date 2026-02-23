@@ -39,42 +39,45 @@ bool LaserManager::init() {
 bool LaserManager::connect() {
     if (!m_llt) { m_lastError = "init() cagrilmadi"; return false; }
 
-    // Adim 1: Mevcut cihazlari enumerate et
-    const unsigned int MAX_DEVICES = 6;
-    unsigned int deviceList[MAX_DEVICES] = {0};
-    int nFound = m_llt->GetDeviceInterfaces(deviceList, MAX_DEVICES);
-
-    std::cout << "[LAZER] GetDeviceInterfaces() = " << nFound << " cihaz bulundu\n";
-
-    if (nFound < 1) {
-        // Hizli enumerate de dene (UDP broadcast olmayan versiyon)
-        nFound = m_llt->GetDeviceInterfacesFast(deviceList, MAX_DEVICES);
-        std::cout << "[LAZER] GetDeviceInterfacesFast() = " << nFound << "\n";
-    }
-
-    if (nFound < 1) {
-        m_lastError = "Agda scanCONTROL cihazi bulunamadi (lütfen Ethernet kablosunu kontrol edin)";
+    // ==== SDK'NIN DOGRU AKISI (InterfaceLLT_2.cpp'den) ====
+    // Adim 1: Cihaz handle'i olustur (olmadan diger tum cagrilar basarisiz olur!)
+    int ret = m_llt->CreateLLTDevice(INTF_TYPE_ETHERNET);
+    std::cout << "[LAZER] CreateLLTDevice(ETHERNET) = " << ret << "\n";
+    if (ret < GENERAL_FUNCTION_OK) {
+        m_lastError = "CreateLLTDevice basarisiz (DLL yuklendi fakat cihaz olusturulamadi)";
         return false;
     }
 
-    // Adim 2: Bulunan ilk cihaza baglan
-    for (int i = 0; i < nFound && i < (int)MAX_DEVICES; ++i) {
-        m_llt->SetDeviceInterface(deviceList[i], 0);
-        int ret = m_llt->Connect();
-        std::cout << "[LAZER] SetDeviceInterface(" << deviceList[i] << ") -> Connect() = " << ret << "\n";
-        if (ret >= GENERAL_FUNCTION_OK) {
-            m_connected = true;
-            m_lastError = "";
-            std::cout << "[LAZER] Baglanti basarili! Cihaz interface=" << deviceList[i] << "\n";
-            return true;
-        }
-        // Baglanti hatasi: bir sonraki
-        char errStr[256] = {};
-        m_llt->TranslateErrorValue(ret, errStr, sizeof(errStr));
-        std::cout << "[LAZER] Hata: " << errStr << " (kod=" << ret << ")\n";
+    // Adim 2: Agdaki scanCONTROL cihazlarini bul
+    const unsigned int MAX_DEVICES = 6;
+    unsigned int deviceList[MAX_DEVICES] = {0};
+    int nFound = m_llt->GetDeviceInterfaces(deviceList, MAX_DEVICES);
+    std::cout << "[LAZER] GetDeviceInterfaces() = " << nFound << " cihaz\n";
+
+    if (nFound < 1) {
+        m_lastError = "Agda scanCONTROL bulunamadi. Ethernet kablosunu ve kamera guc kaynagini kontrol edin.";
+        return false;
     }
 
-    m_lastError = "Bulunan cihazlara baglanilamadi (lutfen diger uygulamalari kapatin)";
+    // Adim 3: Ilk bulunan cihaza baglan
+    m_llt->SetDeviceInterface(deviceList[0], 0);
+    int connRet = m_llt->Connect();
+    std::cout << "[LAZER] Connect() = " << connRet << "\n";
+    if (connRet >= GENERAL_FUNCTION_OK) {
+        m_connected = true;
+        m_lastError = "";
+
+        // Cihaz adini logla
+        char devName[128] = {}, venName[128] = {};
+        m_llt->GetDeviceName(devName, sizeof(devName), venName, sizeof(venName));
+        std::cout << "[LAZER] Baglandi: " << devName << " (" << venName << ")\n";
+        return true;
+    }
+
+    // Hata kodunu insan-okunabilir stringe cevir
+    char errStr[256] = {};
+    m_llt->TranslateErrorValue(connRet, errStr, sizeof(errStr));
+    m_lastError = std::string("Connect basarisiz: ") + errStr + " (kod=" + std::to_string(connRet) + ")";
     return false;
 }
 
