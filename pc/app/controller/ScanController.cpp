@@ -32,8 +32,22 @@ ScanController::~ScanController() {
 void ScanController::connectMcu() { emit mcuConnectionChanged(true); }
 void ScanController::disconnectMcu() { emit mcuConnectionChanged(false); }
 void ScanController::connectLaser() {
+    if (!m_laser) {
+        emit logMessage("ERR", "LaserManager mevcut degil!");
+        return;
+    }
+    if (!m_laser->init()) {
+        emit logMessage("ERR", "Lazer SDK yuklenemedi (LLT.dll)! Lazer bagli mi?");
+        return;
+    }
+    if (!m_laser->connect()) {
+        emit logMessage("ERR", "Lazere baglanilamadi! Ethernet/USB kontrolü yapiniz.");
+        return;
+    }
+    m_laser->startAcquisition();
+    m_isSimMode = false;
     emit laserConnectionChanged(true);
-    emit logMessage("OK", "Lazer baglandi (HW modu).");
+    emit logMessage("OK", "Lazer baglandi ve veri akisi baslatildi.");
 }
 void ScanController::connectLaserSim(const QString& stlPath) {
     if (m_scanning) return;
@@ -99,7 +113,11 @@ void ScanController::connectLaserSim(const QString& stlPath) {
         stopScan();
     });
 }
-void ScanController::disconnectLaser() { emit laserConnectionChanged(false); }
+void ScanController::disconnectLaser() {
+    if (m_laser) m_laser->stopAcquisition();
+    emit laserConnectionChanged(false);
+    emit logMessage("SYS", "Lazer baglantisi kesildi.");
+}
 
 void ScanController::startScan() {
     if (m_scanning) return;

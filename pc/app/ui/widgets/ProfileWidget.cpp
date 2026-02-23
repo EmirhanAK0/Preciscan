@@ -149,7 +149,7 @@ void ProfileWidget::paintEvent(QPaintEvent*) {
     QFont hFont; hFont.setPointSize(7); hFont.setBold(true); p.setFont(hFont);
     p.drawText(QRectF(m_plotArea.left(), 2, m_plotArea.width(), 10),
                Qt::AlignCenter,
-               QString("2D Profil   θ=%.1f°   %2 nokta")
-                   .arg((double)m_currentTheta, 0, 'f', 1)
+               QString("2D Profil  %1 deg  %2 nokta")
+                   .arg(m_currentTheta, 0, 'f', 1)
                    .arg(m_current.size()));
 }
