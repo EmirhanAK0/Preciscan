@@ -26,8 +26,6 @@ ScanController::~ScanController() {
 void ScanController::connectMcu() { emit mcuConnectionChanged(true); }
 void ScanController::disconnectMcu() { emit mcuConnectionChanged(false); }
 void ScanController::connectLaser() { emit laserConnectionChanged(true); }
-void ScanController::disconnectLaser() { emit laserConnectionChanged(false); }
-
 void ScanController::connectLaserSim(const QString& stlPath) {
     if (m_scanning) return;
     
@@ -69,7 +67,22 @@ void ScanController::connectLaserSim(const QString& stlPath) {
 
     m_simWorker = new sim::LaserSimWorker(std::move(mesh), p, this);
     
-    connect(m_simWorker, &sim::LaserSimWorker::profileReady, this, &ScanController::simProfileReceived);
+    connect(m_simWorker, &sim::LaserSimWorker::profileReady, this, [this](float theta, const QVector<QPointF>& sensorData){
+        QVector<QPointF> reconstructed;
+        reconstructed.reserve(sensorData.size());
+        for (const auto& p : sensorData) {
+            float heightZ = p.x(); // Height (X from sensor)
+            float distD = p.y();   // Distance (Z from sensor)
+            float radiusR = m_dOffset - distD; // r = D - d
+            if (radiusR > 0.05f) {
+                reconstructed.push_back(QPointF(radiusR, heightZ));
+            }
+        }
+        if (!reconstructed.isEmpty()) {
+            emit simProfileReceived(theta, reconstructed);
+        }
+    });
+
     connect(m_simWorker, &sim::LaserSimWorker::progressUpdated, this, &ScanController::simProgressUpdated);
     connect(m_simWorker, &sim::LaserSimWorker::scanComplete, this, [this](const QVector<QVector3D>& cloud){
         m_lastCloud = cloud;
@@ -77,6 +90,7 @@ void ScanController::connectLaserSim(const QString& stlPath) {
         stopScan();
     });
 }
+void ScanController::disconnectLaser() { emit laserConnectionChanged(false); }
 
 void ScanController::startScan() {
     if (m_scanning) return;

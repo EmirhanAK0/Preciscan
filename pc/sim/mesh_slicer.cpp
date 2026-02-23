@@ -6,18 +6,15 @@
 namespace sim {
 
 static Vec3f rotateZ(const Vec3f& v, float cosA, float sinA) {
-    return { v.x * cosA - v.y * sinA,
-             v.x * sinA + v.y * cosA,
-             v.z };
+    return { v.x * cosA - v.y * sinA, v.x * sinA + v.y * cosA, v.z };
 }
 
-// Y=targetY duzlemi ile kesisim (X ekseni uzerinde tarama yapmak icin)
-static bool intersectEdgeY(const Vec3f& a, const Vec3f& b, float targetY, Vec3f& hit) {
-    if ((a.y < targetY && b.y < targetY) || (a.y > targetY && b.y > targetY)) return false;
-    if (std::abs(a.y - b.y) < 1e-9f) return false;
-    float t = (targetY - a.y) / (b.y - a.y);
-    hit.x = a.x + (b.x - a.x) * t;
-    hit.y = targetY;
+static bool intersectEdgeX(const Vec3f& a, const Vec3f& b, float targetX, Vec3f& hit) {
+    if ((a.x < targetX && b.x < targetX) || (a.x > targetX && b.x > targetX)) return false;
+    if (std::abs(a.x - b.x) < 1e-9f) return false;
+    float t = (targetX - a.x) / (b.x - a.x);
+    hit.x = targetX;
+    hit.y = a.y + (b.y - a.y) * t;
     hit.z = a.z + (b.z - a.z) * t;
     return true;
 }
@@ -26,49 +23,44 @@ std::vector<ProfilePoint> sliceAtAngle(const Mesh& mesh,
                                        float theta_rad,
                                        const SliceParams& params)
 {
-    // Hizalama Düzeltmesi: -theta_rad - PI/2 (90 derece ofset)
-    const float PI = 3.1415926535f;
-    float slice_angle = -theta_rad - (PI / 2.0f);
-    float cosA = std::cos(slice_angle);
-    float sinA = std::sin(slice_angle);
+    float cosA = std::cos(-theta_rad);
+    float sinA = std::sin(-theta_rad);
 
     std::map<int, float> zMap;
-    const float Z_SCALE = 5.0f; 
+    const float Z_SCALE = 5.0f; // 0.2mm precision
 
     for (const auto& tri : mesh.triangles) {
-        Vec3f rv[3] = {
-            rotateZ(tri.v[0], cosA, sinA),
-            rotateZ(tri.v[1], cosA, sinA),
-            rotateZ(tri.v[2], cosA, sinA)
-        };
+        Vec3f rv[3] = { rotateZ(tri.v[0], cosA, sinA), rotateZ(tri.v[1], cosA, sinA), rotateZ(tri.v[2], cosA, sinA) };
+        float tminZ = std::min({rv[0].z, rv[1].z, rv[2].z});
+        float tmaxZ = std::max({rv[0].z, rv[1].z, rv[2].z});
+        // 22mm dikey sensor simülasyonu
+        if (tmaxZ < 0.0f || tminZ > 22.0f) continue;
 
-        // Z-Filtre (0-22mm gibi bir limit yoksa tamamını al)
-        // Kullanıcı 0-22mm arasını görmek istiyorsa burada bırakabiliriz
-        // ama genel olsun diye tüm mesh'i tarayalım.
-        
         Vec3f hits[3]; int n = 0; Vec3f h;
-        if (intersectEdgeY(rv[0], rv[1], 0.0f, h)) hits[n++] = h;
-        if (intersectEdgeY(rv[1], rv[2], 0.0f, h)) hits[n++] = h;
-        if (intersectEdgeY(rv[2], rv[0], 0.0f, h)) hits[n++] = h;
+        if (intersectEdgeX(rv[0], rv[1], 0.0f, h)) hits[n++] = h;
+        if (intersectEdgeX(rv[1], rv[2], 0.0f, h)) hits[n++] = h;
+        if (intersectEdgeX(rv[2], rv[0], 0.0f, h)) hits[n++] = h;
 
         if (n >= 2) {
             float z0 = hits[0].z, z1 = hits[1].z;
-            float x0 = hits[0].x, x1 = hits[1].x;
-            float startZ = std::min(z0, z1);
-            float endZ = std::max(z0, z1);
+            float y0 = hits[0].y, y1 = hits[1].y;
+            float startZ = std::max(0.0f, std::min(z0, z1));
+            float endZ = std::min(22.0f, std::max(z0, z1));
             for (float z = std::ceil(startZ * Z_SCALE) / Z_SCALE; z <= endZ; z += 0.2f) {
                 int zIdx = (int)(z * Z_SCALE);
                 float t = (std::abs(z1 - z0) < 1e-7f) ? 0.0f : (z - z0) / (z1 - z0);
-                float x = x0 + (x1 - x0) * t;
-                if (zMap.find(zIdx) == zMap.end() || x > zMap[zIdx]) zMap[zIdx] = x;
+                float y = y0 + (y1 - y0) * t;
+                // Look from +Y
+                if (zMap.find(zIdx) == zMap.end() || y > zMap[zIdx]) zMap[zIdx] = y;
             }
         }
     }
 
     std::vector<ProfilePoint> pts;
-    for (auto const& [zIdx, x] : zMap) {
-        // x = Yarıçap (r) as it's already centered
-        pts.push_back({ x, (float)zIdx / Z_SCALE });
+    for (auto const& [zIdx, y] : zMap) {
+        float dist = params.D_offset_mm - y;
+        // ProfilePoint: r = distance, z = height
+        pts.push_back({ dist, (float)zIdx / Z_SCALE }); 
     }
     return pts;
 }

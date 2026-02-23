@@ -4,6 +4,7 @@
 #include "panels/SetupPanel.hpp"
 #include "panels/DiagnosticsPanel.hpp"
 #include "widgets/VisualizerWidget.hpp"
+#include "widgets/ProfileWidget.hpp"
 #include "../controller/ScanController.hpp"
 
 #include <QFileDialog>
@@ -99,7 +100,18 @@ void MainWindow::setupCentralWidget() {
     hLayout->setSpacing(0);
 
     auto* viz = new VisualizerWidget(this);
-    viz->setMinimumWidth(400);
+    auto* profileWidget = new ProfileWidget(this);
+    profileWidget->setMinimumHeight(160);
+    profileWidget->setMaximumHeight(280);
+
+    // 3D viz + 2D profil: dikey splitter
+    auto* leftSplitter = new QSplitter(Qt::Vertical, this);
+    leftSplitter->addWidget(viz);
+    leftSplitter->addWidget(profileWidget);
+    leftSplitter->setStretchFactor(0, 3);
+    leftSplitter->setStretchFactor(1, 1);
+    leftSplitter->setHandleWidth(3);
+    leftSplitter->setStyleSheet("QSplitter::handle { background: #1a1a1a; }");
 
     m_tabWidget = new QTabWidget(this);
     m_tabWidget->setFixedWidth(360);
@@ -124,11 +136,17 @@ void MainWindow::setupCentralWidget() {
     connect(m_scanController, &ScanController::laserConnectionChanged,
             scanPanel, &ScanPanel::onLaserConnected);
 
-    // Simulation signals
+    // Simulation signals -> 3D Visualizer
     connect(m_scanController, &ScanController::simProfileReceived,
             viz, [viz](float theta, const QVector<QPointF>& profile) {
         viz->addProfile(theta, profile);
     });
+    // Simulation signals -> 2D Profile Widget
+    connect(m_scanController, &ScanController::simProfileReceived,
+            profileWidget, &ProfileWidget::updateProfile);
+    // Temizleme sinyali
+    connect(m_scanController, &ScanController::requestClearVisualizer,
+            profileWidget, &ProfileWidget::clear);
 
     // Mesh ve Temizleme baglantilari
     connect(m_scanController, &ScanController::meshLoaded,
@@ -164,7 +182,7 @@ void MainWindow::setupCentralWidget() {
     });
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->addWidget(viz);
+    splitter->addWidget(leftSplitter);
     splitter->addWidget(m_tabWidget);
     splitter->setStretchFactor(0, 1);
     splitter->setStretchFactor(1, 0);

@@ -71,6 +71,7 @@ if(Qt6_FOUND)
         app/ui/widgets/ExposureControl.cpp
         app/ui/widgets/InfoTipButton.cpp
         app/ui/widgets/VisualizerWidget.cpp
+        app/ui/widgets/ProfileWidget.cpp
         app/controller/ScanController.cpp
         io/stl_loader.cpp
         io/ply_writer.cpp

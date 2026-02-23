@@ -26,10 +26,11 @@ void LaserSimWorker::run() {
         float sinA = std::sin(current_angle * (M_PI / 180.0f));
 
         for (const auto& p : profile) {
-            // p.r = distance, p.z = height
-            // Sensor mapping: X = Height, Y = Distance
-            sensorData.push_back(QPointF(p.z, p.r));
+            // p.r = distance (d), p.z = height (h)
+            // Sensor mapping as requested: X = Height, Y = Distance
+            sensorData.push_back(QPointF(p.z, p.r)); 
             
+            // Reconstruct: r = D - d
             float r = m_params.D_offset_mm - p.r;
             if (r > 0.05f) {
                 cloud.push_back(QVector3D(r * cosA, r * sinA, p.z));
