@@ -5,6 +5,7 @@
 #include "panels/DiagnosticsPanel.hpp"
 #include "widgets/VisualizerWidget.hpp"
 #include "widgets/ProfileWidget.hpp"
+#include "widgets/ConnectingOverlay.hpp"
 #include "../controller/ScanController.hpp"
 
 #include <QFileDialog>
@@ -38,6 +39,9 @@ MainWindow::MainWindow(McuListener* mcu, LaserManager* laser,
     setupToolBar();
     setupCentralWidget();
     setupStatusBar();
+
+    // Baglanti overlay — butona basilinca goster, sonuca gore success/error
+    m_connectingOverlay = new ConnectingOverlay(this);
 
     connect(m_stateMachine,   &AppStateMachine::stateChanged,
             this, &MainWindow::onStateChanged);
@@ -86,8 +90,12 @@ void MainWindow::setupToolBar() {
     m_laserBtn = new QPushButton("Lazer  Baglan", this);
     m_laserBtn->setCheckable(true);
     connect(m_laserBtn, &QPushButton::clicked, this, [this](bool checked) {
-        if (checked) m_scanController->connectLaser();
-        else         m_scanController->disconnectLaser();
+        if (checked) {
+            m_connectingOverlay->showConnecting();
+            m_scanController->connectLaser();
+        } else {
+            m_scanController->disconnectLaser();
+        }
     });
     tb->addWidget(m_laserBtn);
 }
@@ -243,4 +251,12 @@ void MainWindow::onLaserConnectionChanged(bool connected) {
     m_laserStatusLabel->setStyleSheet(
         connected ? "color:#2ecc71;font-size:11px;padding:0 6px;"
                   : "color:#e74c3c;font-size:11px;padding:0 6px;");
+
+    // Overlay'i sonuca gore guncelle (sadece overlay aciksa)
+    if (m_connectingOverlay && m_connectingOverlay->isVisible()) {
+        if (connected)
+            m_connectingOverlay->showSuccess();
+        else
+            m_connectingOverlay->showError("Baglanilamadi");
+    }
 }

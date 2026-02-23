@@ -72,6 +72,7 @@ if(Qt6_FOUND)
         app/ui/widgets/InfoTipButton.cpp
         app/ui/widgets/VisualizerWidget.cpp
         app/ui/widgets/ProfileWidget.cpp
+        app/ui/widgets/ConnectingOverlay.cpp
         app/controller/ScanController.cpp
         io/stl_loader.cpp
         io/ply_writer.cpp

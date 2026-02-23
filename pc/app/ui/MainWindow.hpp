@@ -10,6 +10,7 @@ class QPushButton;
 class McuListener;
 class LaserManager;
 class SPSCRingBuffer;
+class ConnectingOverlay;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -44,5 +45,6 @@ private:
     QLabel* m_mcuStatusLabel;
     QLabel* m_laserStatusLabel;
 
-    QTabWidget* m_tabWidget;
+    QTabWidget*        m_tabWidget;
+    ConnectingOverlay* m_connectingOverlay = nullptr;
 };
