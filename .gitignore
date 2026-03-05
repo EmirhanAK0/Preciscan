@@ -1,13 +1,26 @@
-﻿# Build directories
-build/
-pc/build/
-pc/out/
-out/
+﻿# Build outputs
+/build/
+/pc/build/
+/pc/out/
+/pc/out/build/
+**/CMakeFiles/
+**/_deps/
+**/Testing/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/*.vcxproj
+**/*.vcxproj.filters
+**/*.sln
+**/*.tlog
+**/*.obj
+**/*.pdb
+**/*.ilk
 
-# VS files
+# Visual Studio
 .vs/
-.vscode/
-*.user
+*.VC.db
+*.VC.VC.opendb
+*.slnx.sqlite
 
 # CMake cache
 CMakeCache.txt
