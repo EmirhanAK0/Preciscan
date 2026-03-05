@@ -2,27 +2,29 @@
 // C4324: alignas(64) nedeniyle struct sonu dolduruldu -- kasitli optimizasyon.
 // head_ ve tail_ farkli cache line'larda olmali (false sharing onleme).
 #ifdef _MSC_VER
-#pragma warning(disable: 4324)
+#pragma warning(disable : 4324)
 #endif
-#include "../core/packet.h"
 #include <atomic>
-#include <vector>
 #include <thread>
+#include <vector>
 
-class SPSCRingBuffer {
+#include "../core/packet.h"
+
+class SPSCRingBuffer
+{
 public:
     explicit SPSCRingBuffer(size_t capacity)
-        : capacity_(capacity + 1),
-          buffer_(capacity + 1),
-          head_(0),
-          tail_(0),
-          drops_(0),
-          stop_signal_(false) {}
+        : capacity_(capacity + 1), buffer_(capacity + 1), head_(0), tail_(0), drops_(0),
+          stop_signal_(false)
+    {
+    }
 
-    bool try_push(Packet&& pkt) {
+    bool try_push(Packet&& pkt)
+    {
         const size_t current_head = head_.load(std::memory_order_relaxed);
-        const size_t next_head = (current_head + 1) % capacity_;
-        if (next_head == tail_.load(std::memory_order_acquire)) {
+        const size_t next_head    = (current_head + 1) % capacity_;
+        if (next_head == tail_.load(std::memory_order_acquire))
+        {
             drops_.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
@@ -31,9 +33,11 @@ public:
         return true;
     }
 
-    bool try_pop(Packet& out_pkt) {
+    bool try_pop(Packet& out_pkt)
+    {
         const size_t current_tail = tail_.load(std::memory_order_relaxed);
-        if (current_tail == head_.load(std::memory_order_acquire)) {
+        if (current_tail == head_.load(std::memory_order_acquire))
+        {
             return false; // Kuyruk bos — hic bloklanma
         }
         out_pkt = std::move(buffer_[current_tail]);
@@ -41,11 +45,15 @@ public:
         return true;
     }
 
-    bool pop(Packet& out_pkt) {
-        while (true) {
+    bool pop(Packet& out_pkt)
+    {
+        while (true)
+        {
             const size_t current_tail = tail_.load(std::memory_order_relaxed);
-            if (current_tail == head_.load(std::memory_order_acquire)) {
-                if (stop_signal_.load(std::memory_order_relaxed)) {
+            if (current_tail == head_.load(std::memory_order_acquire))
+            {
+                if (stop_signal_.load(std::memory_order_relaxed))
+                {
                     return false;
                 }
                 std::this_thread::yield();
@@ -57,11 +65,13 @@ public:
         }
     }
 
-    void stop() {
+    void stop()
+    {
         stop_signal_.store(true, std::memory_order_relaxed);
     }
 
-    uint64_t get_drops() const {
+    uint64_t get_drops() const
+    {
         return drops_.load(std::memory_order_relaxed);
     }
 

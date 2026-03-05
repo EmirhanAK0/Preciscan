@@ -1,10 +1,12 @@
 #include "SpeedControl.hpp"
+
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
-#include <QLabel>
 
-SpeedControl::SpeedControl(QWidget* parent) : QWidget(parent) {
+SpeedControl::SpeedControl(QWidget* parent) : QWidget(parent)
+{
     auto layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -28,14 +30,17 @@ SpeedControl::SpeedControl(QWidget* parent) : QWidget(parent) {
     connect(m_spinBox, &QSpinBox::valueChanged, this, &SpeedControl::valueChanged);
 }
 
-void SpeedControl::setValue(int rpm) {
+void SpeedControl::setValue(int rpm)
+{
     m_spinBox->setValue(rpm);
 }
 
-int SpeedControl::value() const {
+int SpeedControl::value() const
+{
     return m_spinBox->value();
 }
 
-void SpeedControl::setEnabled(bool enabled) {
+void SpeedControl::setEnabled(bool enabled)
+{
     QWidget::setEnabled(enabled);
 }

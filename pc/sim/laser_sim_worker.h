@@ -1,18 +1,25 @@
 #pragma once
-#include <QThread>
-#include <QVector>
-#include <QPointF>
-#include <QVector3D>
-#include <atomic>
 #include "mesh_slicer.h"
 
-namespace sim {
+#include <QPointF>
+#include <QThread>
+#include <QVector>
+#include <atomic>
 
-class LaserSimWorker : public QThread {
+#include <QVector3D>
+
+namespace sim
+{
+
+class LaserSimWorker : public QThread
+{
     Q_OBJECT
 public:
     LaserSimWorker(const Mesh& mesh, const SliceParams& params, QObject* parent = nullptr);
-    void stop() { m_running = false; }
+    void stop()
+    {
+        m_running = false;
+    }
 
 signals:
     void profileReady(float theta_deg, const QVector<QPointF>& profile);

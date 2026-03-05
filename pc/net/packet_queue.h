@@ -1,19 +1,24 @@
 ﻿#pragma once
-#include "../core/packet.h"
-#include <queue>
-#include <mutex>
-#include <condition_variable>
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <queue>
 
-class PacketQueue {
+#include "../core/packet.h"
+
+class PacketQueue
+{
 public:
     explicit PacketQueue(size_t max_capacity)
-        : capacity_(max_capacity), stop_signal_(false), drops_(0) {
+        : capacity_(max_capacity), stop_signal_(false), drops_(0)
+    {
     }
 
-    bool try_push(Packet&& pkt) {
+    bool try_push(Packet&& pkt)
+    {
         std::lock_guard<std::mutex> lock(mux_);
-        if (queue_.size() >= capacity_) {
+        if (queue_.size() >= capacity_)
+        {
             drops_++;
             return false;
         }
@@ -22,10 +27,12 @@ public:
         return true;
     }
 
-    bool pop(Packet& out_pkt) {
+    bool pop(Packet& out_pkt)
+    {
         std::unique_lock<std::mutex> lock(mux_);
         cv_.wait(lock, [this] { return !queue_.empty() || stop_signal_; });
-        if (queue_.empty() && stop_signal_) {
+        if (queue_.empty() && stop_signal_)
+        {
             return false;
         }
         out_pkt = std::move(queue_.front());
@@ -33,18 +40,21 @@ public:
         return true;
     }
 
-    void stop() {
+    void stop()
+    {
         std::lock_guard<std::mutex> lock(mux_);
         stop_signal_ = true;
         cv_.notify_all();
     }
 
-    uint64_t get_drops() const {
+    uint64_t get_drops() const
+    {
         std::lock_guard<std::mutex> lock(mux_);
         return drops_;
     }
 
-    size_t size() const {
+    size_t size() const
+    {
         std::lock_guard<std::mutex> lock(mux_);
         return queue_.size();
     }

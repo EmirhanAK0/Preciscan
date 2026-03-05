@@ -1,16 +1,17 @@
 #include "LayerItemWidget.hpp"
-#include <QHBoxLayout>
+
 #include <QCheckBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 
-LayerItemWidget::LayerItemWidget(int layerId, QWidget* parent)
-    : QWidget(parent), m_layerId(layerId)
+LayerItemWidget::LayerItemWidget(int layerId, QWidget* parent) : QWidget(parent), m_layerId(layerId)
 {
     // Kart gibi görünmesi için arka plan boyamasýný aktif et
     setAttribute(Qt::WA_StyledBackground, true);
     // Bu widget'a özel stil (Listenin içinde þerit gibi duracak)
-    setStyleSheet("LayerItemWidget { background-color: #2d2d30; border-radius: 4px; margin-bottom: 4px; }");
+    setStyleSheet(
+        "LayerItemWidget { background-color: #2d2d30; border-radius: 4px; margin-bottom: 4px; }");
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 8, 10, 8); // Ýç boþluklar
@@ -28,10 +29,9 @@ LayerItemWidget::LayerItemWidget(int layerId, QWidget* parent)
     auto* btnDelete = new QPushButton("?", this);
     btnDelete->setFixedSize(24, 24);
     btnDelete->setCursor(Qt::PointingHandCursor);
-    btnDelete->setStyleSheet(
-        "QPushButton { background: transparent; color: #cc5555; font-weight: bold; font-size: 14px; }"
-        "QPushButton:hover { background: #3e3e42; color: #ff6666; }"
-    );
+    btnDelete->setStyleSheet("QPushButton { background: transparent; color: #cc5555; font-weight: "
+                             "bold; font-size: 14px; }"
+                             "QPushButton:hover { background: #3e3e42; color: #ff6666; }");
 
     // Silme fonksiyonu eklenecekse connect buraya...
 
@@ -43,10 +43,12 @@ LayerItemWidget::LayerItemWidget(int layerId, QWidget* parent)
     setLayout(layout);
 }
 
-bool LayerItemWidget::isSelected() const {
+bool LayerItemWidget::isSelected() const
+{
     return m_check->isChecked();
 }
 
-int LayerItemWidget::layerId() const {
+int LayerItemWidget::layerId() const
+{
     return m_layerId;
 }

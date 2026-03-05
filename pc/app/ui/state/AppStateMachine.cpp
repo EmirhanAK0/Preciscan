@@ -1,7 +1,6 @@
 #include "AppStateMachine.hpp"
 
-AppStateMachine::AppStateMachine(QObject* parent)
-    : QObject(parent)
+AppStateMachine::AppStateMachine(QObject* parent) : QObject(parent)
 {
 }
 

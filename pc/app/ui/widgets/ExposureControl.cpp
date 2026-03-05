@@ -1,10 +1,12 @@
 #include "ExposureControl.hpp"
+
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
-#include <QLabel>
 
-ExposureControl::ExposureControl(QWidget* parent) : QWidget(parent) {
+ExposureControl::ExposureControl(QWidget* parent) : QWidget(parent)
+{
     auto layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -26,14 +28,17 @@ ExposureControl::ExposureControl(QWidget* parent) : QWidget(parent) {
     connect(m_spinBox, &QSpinBox::valueChanged, this, &ExposureControl::valueChanged);
 }
 
-void ExposureControl::setValue(int microseconds) {
+void ExposureControl::setValue(int microseconds)
+{
     m_spinBox->setValue(microseconds);
 }
 
-int ExposureControl::value() const {
+int ExposureControl::value() const
+{
     return m_spinBox->value();
 }
 
-void ExposureControl::setEnabled(bool enabled) {
+void ExposureControl::setEnabled(bool enabled)
+{
     QWidget::setEnabled(enabled);
 }

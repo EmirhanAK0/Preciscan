@@ -1,19 +1,25 @@
 #include "meta_writer.h"
+
 #include <fstream>
 
-static std::string esc(const std::string& s) {
+static std::string esc(const std::string& s)
+{
     std::string out;
     out.reserve(s.size());
-    for (char c : s) {
-        if (c == '\\' || c == '"') out.push_back('\\');
+    for (char c : s)
+    {
+        if (c == '\\' || c == '"')
+            out.push_back('\\');
         out.push_back(c);
     }
     return out;
 }
 
-bool write_meta_json(const std::string& path, const Config& cfg) {
+bool write_meta_json(const std::string& path, const Config& cfg)
+{
     std::ofstream f(path, std::ios::out | std::ios::trunc);
-    if (!f) return false;
+    if (!f)
+        return false;
 
     f << "{\n";
     f << "  \"mode\": \"" << esc(cfg.mode) << "\",\n";

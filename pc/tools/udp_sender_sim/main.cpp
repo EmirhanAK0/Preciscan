@@ -1,16 +1,19 @@
-﻿#include <iostream>
-#include <chrono>
+﻿#include <chrono>
+#include <iostream>
 #include <thread>
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
-struct McuPacket {
+struct McuPacket
+{
     uint32_t seq;
     float y;
 };
 
-int main() {
+int main()
+{
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
 
@@ -18,7 +21,7 @@ int main() {
 
     sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(8080);
+    addr.sin_port   = htons(8080);
     // [DUZELTME C4996] inet_addr deprecated, inet_pton kullanildi
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
@@ -27,10 +30,12 @@ int main() {
 
     std::cout << ">>> GARANTI SIMULATOR BASLATILDI (8080) <<<\n";
 
-    while (true) {
-        McuPacket pkt = { count, position };
+    while (true)
+    {
+        McuPacket pkt = {count, position};
         sendto(sock, (const char*)&pkt, sizeof(pkt), 0, (sockaddr*)&addr, sizeof(addr));
-        std::cout << "\r[SIM] Gonderilen -> Seq: " << count << " Y: " << position << " mm" << std::flush;
+        std::cout << "\r[SIM] Gonderilen -> Seq: " << count << " Y: " << position << " mm"
+                  << std::flush;
         count++;
         position += 0.5f;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));

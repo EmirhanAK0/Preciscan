@@ -1,27 +1,32 @@
 #pragma once
 
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <vector>
-#include <cstdint>
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <mutex>
+#include <queue>
+#include <vector>
 
 // Veri Paketi Yapısı
-struct Packet {
+struct Packet
+{
     std::vector<uint8_t> data;
 };
 
-class PacketQueue {
+class PacketQueue
+{
 public:
     explicit PacketQueue(size_t max_capacity)
-        : capacity_(max_capacity), stop_signal_(false), drops_(0) {
+        : capacity_(max_capacity), stop_signal_(false), drops_(0)
+    {
     }
 
     // PRODUCER (Veri Alan) burayı çağırır
-    bool try_push(Packet&& pkt) {
+    bool try_push(Packet&& pkt)
+    {
         std::lock_guard<std::mutex> lock(mux_);
-        if (queue_.size() >= capacity_) {
+        if (queue_.size() >= capacity_)
+        {
             drops_++;
             return false; // Kuyruk dolu, paket düştü!
         }
@@ -31,12 +36,14 @@ public:
     }
 
     // CONSUMER (Veri İşleyen) burayı çağırır
-    bool pop(Packet& out_pkt) {
+    bool pop(Packet& out_pkt)
+    {
         std::unique_lock<std::mutex> lock(mux_);
         // Veri gelene kadar veya dur emri gelene kadar bekle
         cv_.wait(lock, [this] { return !queue_.empty() || stop_signal_; });
 
-        if (queue_.empty() && stop_signal_) {
+        if (queue_.empty() && stop_signal_)
+        {
             return false; // İş bitti
         }
 
@@ -45,18 +52,21 @@ public:
         return true;
     }
 
-    void stop() {
+    void stop()
+    {
         std::lock_guard<std::mutex> lock(mux_);
         stop_signal_ = true;
         cv_.notify_all(); // Herkesi uyandır
     }
 
-    uint64_t get_drops() const {
+    uint64_t get_drops() const
+    {
         std::lock_guard<std::mutex> lock(mux_);
         return drops_;
     }
 
-    size_t size() const {
+    size_t size() const
+    {
         std::lock_guard<std::mutex> lock(mux_);
         return queue_.size();
     }

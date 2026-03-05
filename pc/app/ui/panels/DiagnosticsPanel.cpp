@@ -1,11 +1,11 @@
 #include "DiagnosticsPanel.hpp"
 
-#include <QVBoxLayout>
+#include <QFrame>
 #include <QGridLayout>
 #include <QLabel>
 #include <QProgressBar>
-#include <QFrame>
 #include <QTimer>
+#include <QVBoxLayout>
 
 // -------- Section helper --------
 static QFrame* createSection(const QString& title, QVBoxLayout*& outLayout)
@@ -23,8 +23,7 @@ static QFrame* createSection(const QString& title, QVBoxLayout*& outLayout)
 }
 // --------------------------------
 
-DiagnosticsPanel::DiagnosticsPanel(QWidget* parent)
-    : QWidget(parent)
+DiagnosticsPanel::DiagnosticsPanel(QWidget* parent) : QWidget(parent)
 {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
@@ -34,10 +33,10 @@ DiagnosticsPanel::DiagnosticsPanel(QWidget* parent)
 
     QGridLayout* systemGrid = new QGridLayout;
 
-    m_laserStatus = new QLabel("Laser: Connected");
-    m_sdkStatus = new QLabel("SDK: OK");
+    m_laserStatus   = new QLabel("Laser: Connected");
+    m_sdkStatus     = new QLabel("SDK: OK");
     m_triggerStatus = new QLabel("Trigger: Sync OK");
-    m_stateLabel = new QLabel("State: IDLE");
+    m_stateLabel    = new QLabel("State: IDLE");
 
     m_bufferUsage = new QProgressBar;
     m_bufferUsage->setRange(0, 100);
@@ -58,9 +57,9 @@ DiagnosticsPanel::DiagnosticsPanel(QWidget* parent)
 
     QGridLayout* qualityGrid = new QGridLayout;
 
-    m_profileRate = new QLabel("Profile Rate: 980 Hz");
+    m_profileRate     = new QLabel("Profile Rate: 980 Hz");
     m_droppedProfiles = new QLabel("Dropped Profiles: 1.2 %");
-    m_plr = new QLabel("PLR: 1.2 % (GOOD)");
+    m_plr             = new QLabel("PLR: 1.2 % (GOOD)");
 
     qualityGrid->addWidget(m_profileRate, 0, 0);
     qualityGrid->addWidget(m_plr, 0, 1);
@@ -106,11 +105,13 @@ void DiagnosticsPanel::updateMetrics()
     int buf = (m_bufferUsage->value() + 2) % 100;
     m_bufferUsage->setValue(buf);
 
-    if (buf > 80) {
+    if (buf > 80)
+    {
         m_warningLine->setText("[WARN] Buffer usage high");
         m_warningLine->setStyleSheet("color: red;");
     }
-    else {
+    else
+    {
         m_warningLine->setText("[INFO] System operating normally");
         m_warningLine->setStyleSheet("color: orange;");
     }
