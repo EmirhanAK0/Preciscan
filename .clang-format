@@ -1,0 +1,94 @@
+# Preciscan clang-format configuration
+# Coding Standard v1.0
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+
+# Brace style — Allman
+BreakBeforeBraces: Allman
+
+# Column limit
+ColumnLimit: 100
+
+# Namespace
+NamespaceIndentation: None
+CompactNamespaces: false
+
+# Include sırası (Coding Standard Madde 4)
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  # 1. Kendi header'ı (tırnaksız, proje içi .h)
+  - Regex: '^"[a-z_]+\.h"'
+    Priority: 1
+  # 2. Standard library
+  - Regex: '^<[a-z_]+>'
+    Priority: 2
+  # 3. Third-party (angle bracket, version veya nokta içeren)
+    #    fmt, boost, catch2 vb.
+  - Regex: '^<(fmt|boost|catch2|spdlog)/'
+    Priority: 3
+  # 4. Proje header'ları (katman prefix'li)
+  - Regex: '^"(core|net|io|app|sim|hardware)/'
+    Priority: 4
+
+# Pointer & reference alignment
+PointerAlignment: Left
+
+# Fonksiyon parametreleri
+AllowAllParametersOfDeclarationOnNextLine: false
+BinPackParameters: false
+AlignAfterOpenBracket: Align
+
+# Return type — aynı satırda
+AlwaysBreakAfterReturnType: None
+
+# Kısa bloklar — tek satıra izin verme (Allman ile tutarlı)
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# Operatör hizalama
+AlignOperands: Align
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveDeclarations:
+  Enabled: false
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
+
+# Template
+AlwaysBreakTemplateDeclarations: Yes
+
+# Constructor initializer list
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+
+# Boş satır
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+# Access modifier (public/private/protected)
+AccessModifierOffset: -4
+
+# Spaces
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: Never
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeRangeBasedForLoopColon: true
+
+# Cpp standard
+Standard: c++17
