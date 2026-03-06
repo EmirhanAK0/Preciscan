@@ -10,6 +10,7 @@ add_library(preciscan_core STATIC
     core/seq_metrics.cpp
     core/meta_writer.cpp
     core/metrics_writer.cpp
+    core/scan_state_machine.cpp
 )
 target_include_directories(preciscan_core PUBLIC core/)
 target_compile_options(preciscan_core PRIVATE /W4)

@@ -1,5 +1,4 @@
 ﻿include(FetchContent)
-
 # Catch2'yi internetten indir (internet olmadan build edilemez, bir kerelik)
 FetchContent_Declare(
     Catch2
@@ -7,20 +6,17 @@ FetchContent_Declare(
     GIT_TAG        v3.5.2
 )
 FetchContent_MakeAvailable(Catch2)
-
 # Test executable
 add_executable(preciscan_tests
     test_seq_tracker.cpp
+    test_scan_state_machine.cpp
 )
-
 target_link_libraries(preciscan_tests
     PRIVATE
     preciscan_core
     Catch2::Catch2WithMain
 )
-
 target_compile_options(preciscan_tests PRIVATE /W4)
-
 # CTest entegrasyonu
 include(CTest)
 include(Catch)
