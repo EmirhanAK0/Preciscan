@@ -51,6 +51,14 @@ add_executable(udp_sender_sim tools/udp_sender_sim/main.cpp)
 target_link_libraries(udp_sender_sim PRIVATE ws2_32)
 target_compile_options(udp_sender_sim PRIVATE /W4)
 
+# --- Trigger Test Tool ---
+add_executable(trigger_test
+    tools/trigger_test/main.cpp
+)
+target_include_directories(trigger_test PRIVATE third_party/microepsilon/)
+target_link_libraries(trigger_test PRIVATE preciscan_hw)
+target_compile_options(trigger_test PRIVATE /W4 /utf-8)
+
 # --- Qt UI (Qt6 kurulu olmali: C:/Qt/6.x.x/msvc2022_64) ---
 find_package(Qt6 QUIET COMPONENTS Widgets OpenGLWidgets)
 if(Qt6_FOUND)
