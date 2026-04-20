@@ -22,26 +22,142 @@ LaserManager::LaserManager(const std::string& dllPath, IDataSink* sink)
 LaserManager::~LaserManager()
 {
     stopAcquisition();
+    disconnect();
     delete m_llt;
+    m_llt = nullptr;
 }
 
 bool LaserManager::init()
 {
+    if (m_llt)
+        return true;
+
     bool loadError = false;
-    m_llt          = new CInterfaceLLT(m_dllPath.c_str(), &loadError);
+    m_llt = new CInterfaceLLT(m_dllPath.c_str(), &loadError);
+
     if (loadError)
     {
         m_lastError = "LLT.dll yuklenemedi: " + m_dllPath;
         std::cerr << "[LAZER] " << m_lastError << "\n";
+        delete m_llt;
+        m_llt = nullptr;
         return false;
     }
+
     std::cout << "[LAZER] DLL yuklendi: " << m_dllPath << "\n";
     return true;
 }
 
-// ===========================================================================
-// SDK GetProfiles_Callback orneginin tam akisi
-// ===========================================================================
+bool LaserManager::validateTiming(std::string* err) const
+{
+    if (m_profileRateHz <= 0)
+    {
+        if (err)
+            *err = "Profil hizi sifirdan buyuk olmalidir.";
+        return false;
+    }
+
+    const int periodUs = 1000000 / m_profileRateHz;
+    if (m_exposureTimeUs >= periodUs)
+    {
+        if (err)
+            *err = "Pozlama suresi, secilen profil hizinin periyodundan kucuk olmalidir.";
+        return false;
+    }
+
+    return true;
+}
+
+unsigned int LaserManager::chooseResolutionFromPoints(unsigned int points) const
+{
+    switch (points)
+    {
+    case 160:
+    case 320:
+    case 640:
+    case 1280:
+        return points;
+    default:
+        return 1280;
+    }
+}
+
+DWORD LaserManager::buildExposureValue() const
+{
+    DWORD value = static_cast<DWORD>(m_exposureTimeUs);
+    if (m_autoExposure)
+        value |= EXPOSURE_AUTOMATIC;
+    return value;
+}
+
+DWORD LaserManager::buildMeasuringFieldValue() const
+{
+    // Quick reference'ta predefined fields:
+    // large -> 0
+    // standard -> 2
+    // small -> 7
+    // Bu indeksler FEATURE_FUNCTION_ROI1_PRESET / deprecated MEASURINGFIELD için kullanılır.
+    if (m_measuringField == "large")
+        return 0;
+    if (m_measuringField == "standard")
+        return 2;
+    if (m_measuringField == "small")
+        return 7;
+
+    return 0;
+}
+
+bool LaserManager::applyAcquisitionSettings()
+{
+    if (!m_llt || !m_connected)
+    {
+        m_lastError = "Cihaz bagli degil";
+        return false;
+    }
+
+    std::string timingErr;
+    if (!validateTiming(&timingErr))
+    {
+        m_lastError = timingErr;
+        std::cerr << "[LAZER] " << m_lastError << "\n";
+        return false;
+    }
+
+    // 1) Resolution / points per profile
+    m_resolution = chooseResolutionFromPoints(m_pointsPerProfile);
+    int retRes = m_llt->SetResolution(m_resolution);
+    std::cout << "[LAZER] SetResolution(" << m_resolution << ") = " << retRes << "\n";
+
+    // 2) Measuring field preset
+    const DWORD measuringFieldValue = buildMeasuringFieldValue();
+    int retField = m_llt->SetFeature(FEATURE_FUNCTION_ROI1_PRESET, measuringFieldValue);
+    std::cout << "[LAZER] SetFeature(ROI1_PRESET=" << measuringFieldValue << ") = " << retField << "\n";
+
+    // 3) Trigger + profile config
+    int retTrig = m_llt->SetFeature(FEATURE_FUNCTION_TRIGGER, TRIG_INTERNAL);
+    std::cout << "[LAZER] SetFeature(TRIGGER=INTERNAL) = " << retTrig << "\n";
+
+    int retCfg = m_llt->SetProfileConfig(PROFILE);
+    std::cout << "[LAZER] SetProfileConfig(PROFILE) = " << retCfg << "\n";
+
+    // 4) Exposure
+    const DWORD exposureValue = buildExposureValue();
+    int retExp = m_llt->SetFeature(FEATURE_FUNCTION_EXPOSURE_TIME, exposureValue);
+    std::cout << "[LAZER] SetFeature(EXPOSURE=" << exposureValue << ") = " << retExp << "\n";
+
+    // 5) Idle = period - exposure
+    const int periodUs = 1000000 / m_profileRateHz;
+    int idleUs = periodUs - m_exposureTimeUs;
+    if (idleUs < 1)
+        idleUs = 1;
+
+    int retIdle = m_llt->SetFeature(FEATURE_FUNCTION_IDLE_TIME, static_cast<DWORD>(idleUs));
+    std::cout << "[LAZER] SetFeature(IDLE=" << idleUs << " us) = " << retIdle << "\n";
+
+    m_lastError.clear();
+    return true;
+}
+
 bool LaserManager::connect()
 {
     if (!m_llt)
@@ -50,7 +166,9 @@ bool LaserManager::connect()
         return false;
     }
 
-    // 1. Cihaz handle olustur
+    if (m_connected)
+        return true;
+
     int ret = m_llt->CreateLLTDevice(INTF_TYPE_ETHERNET);
     std::cout << "[LAZER] CreateLLTDevice = " << ret << "\n";
     if (ret < GENERAL_FUNCTION_OK)
@@ -59,9 +177,8 @@ bool LaserManager::connect()
         return false;
     }
 
-    // 2. Agdaki cihazlari bul
     unsigned int devList[6] = {};
-    int nFound              = m_llt->GetDeviceInterfaces(devList, 6);
+    int nFound = m_llt->GetDeviceInterfaces(devList, 6);
     std::cout << "[LAZER] GetDeviceInterfaces = " << nFound << " cihaz\n";
     if (nFound < 1)
     {
@@ -69,8 +186,8 @@ bool LaserManager::connect()
         return false;
     }
 
-    // 3. Ilk cihaza baglan
     m_llt->SetDeviceInterface(devList[0], 0);
+
     int connRet = m_llt->Connect();
     std::cout << "[LAZER] Connect() = " << connRet << "\n";
     if (connRet < GENERAL_FUNCTION_OK)
@@ -80,54 +197,68 @@ bool LaserManager::connect()
         m_lastError = std::string("Connect basarisiz: ") + err;
         return false;
     }
+
     m_connected = true;
 
-    // 4. Scanner tipini oku (ConvertProfile2Values icin gerekli)
     m_llt->GetLLTType(&m_scannerType);
-    std::cout << "[LAZER] ScannerType = " << (int)m_scannerType << "\n";
+    std::cout << "[LAZER] ScannerType = " << static_cast<int>(m_scannerType) << "\n";
 
-    // 5. Cozunurlugu oku ve set et (SDK ornegi gibi ilk secenegi al)
-    std::vector<DWORD> resolutions(4);
-    m_llt->GetResolutions(resolutions.data(), (unsigned int)resolutions.size());
-    m_resolution = resolutions[0];
-    m_llt->SetResolution(m_resolution);
-    std::cout << "[LAZER] Resolution = " << m_resolution << "\n";
+    if (!applyAcquisitionSettings())
+    {
+        disconnect();
+        return false;
+    }
 
-    // 6. SDK orneginin konfigurasyonu: trigger, profil formati, exposure, idle
-    m_llt->SetFeature(FEATURE_FUNCTION_TRIGGER, TRIG_INTERNAL);
-    m_llt->SetProfileConfig(PROFILE);
-    m_llt->SetFeature(FEATURE_FUNCTION_EXPOSURE_TIME, 100); // 100 us
-    m_llt->SetFeature(FEATURE_FUNCTION_IDLE_TIME, 500);     // 500 us (2kHz profile rate)
-
-    // Cihaz adini logla
     char devName[128] = {}, venName[128] = {};
     m_llt->GetDeviceName(devName, sizeof(devName), venName, sizeof(venName));
     std::cout << "[LAZER] Baglandi: " << devName << " (" << venName << ")\n";
-    m_lastError = "";
+
     return true;
 }
 
 void LaserManager::startAcquisition()
 {
-    if (!m_connected)
+    if (!m_connected || !m_llt || m_acquiring)
         return;
-    // SDK ornegi: once callback kaydet, sonra TransferProfiles
+
     m_llt->RegisterCallback(STD_CALL, (void*)GlobalLaserCallback, static_cast<void*>(m_sink));
     m_llt->TransferProfiles(NORMAL_TRANSFER, 1);
-    std::cout << "[LAZER] Veri akisi AKTIF (resolution=" << m_resolution << ")\n";
+    m_acquiring = true;
+
+    std::cout << "[LAZER] Veri akisi AKTIF"
+              << " (resolution=" << m_resolution
+              << ", rate=" << m_profileRateHz
+              << " Hz, exposure=" << m_exposureTimeUs
+              << " us, auto=" << (m_autoExposure ? "on" : "off")
+              << ", field=" << m_measuringField
+              << ")\n";
 }
 
 void LaserManager::stopAcquisition()
 {
-    if (!m_llt || !m_connected)
+    if (!m_llt || !m_connected || !m_acquiring)
         return;
+
     m_llt->TransferProfiles(NORMAL_TRANSFER, 0);
-    m_llt->Disconnect();
-    m_connected = false;
+    m_acquiring = false;
+
     std::cout << "[LAZER] Veri akisi DURDURULDU\n";
 }
 
-// SDK ConvertProfile2Values: ham byte dizisi → mm cinsinden X/Z
+void LaserManager::disconnect()
+{
+    if (!m_llt || !m_connected)
+        return;
+
+    if (m_acquiring)
+        stopAcquisition();
+
+    m_llt->Disconnect();
+    m_connected = false;
+
+    std::cout << "[LAZER] Cihaz baglantisi kapatildi\n";
+}
+
 bool LaserManager::convertProfile(const unsigned char* data,
                                   size_t /*size*/,
                                   std::vector<double>& outX,
@@ -135,12 +266,48 @@ bool LaserManager::convertProfile(const unsigned char* data,
 {
     if (!m_llt || m_resolution == 0)
         return false;
+
     outX.resize(m_resolution);
     outZ.resize(m_resolution);
-    int ret = m_llt->ConvertProfile2Values(data, m_resolution, PROFILE, m_scannerType,
-                                           0,    // reflection 0 (ana yansima)
-                                           true, // mm cinsine cevirme aktif
-                                           nullptr, nullptr, nullptr, outX.data(), outZ.data(),
-                                           nullptr, nullptr);
+
+    int ret = m_llt->ConvertProfile2Values(data,
+                                           m_resolution,
+                                           PROFILE,
+                                           m_scannerType,
+                                           0,
+                                           true,
+                                           nullptr,
+                                           nullptr,
+                                           nullptr,
+                                           outX.data(),
+                                           outZ.data(),
+                                           nullptr,
+                                           nullptr);
+
     return (ret & CONVERT_X) && (ret & CONVERT_Z);
+}
+
+void LaserManager::setProfileRateHz(int hz)
+{
+    m_profileRateHz = hz;
+}
+
+void LaserManager::setExposureTimeUs(int us)
+{
+    m_exposureTimeUs = us;
+}
+
+void LaserManager::setAutoExposure(bool enabled)
+{
+    m_autoExposure = enabled;
+}
+
+void LaserManager::setMeasuringField(const std::string& field)
+{
+    m_measuringField = field;
+}
+
+void LaserManager::setPointsPerProfile(unsigned int points)
+{
+    m_pointsPerProfile = points;
 }

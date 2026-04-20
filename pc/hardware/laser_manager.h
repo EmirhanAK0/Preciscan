@@ -1,4 +1,5 @@
 ﻿#pragma once
+
 #include <string>
 #include <vector>
 
@@ -15,34 +16,87 @@ public:
     bool connect();
     void startAcquisition();
     void stopAcquisition();
+    void disconnect();
 
-    // SDK ConvertProfile2Values: ham bayt → mm (X=konum, Z=mesafe)
-    // Cagiran: vector boyutlarini resolution() kadar ayirmalı
     bool convertProfile(const unsigned char* data,
                         size_t size,
                         std::vector<double>& outX,
                         std::vector<double>& outZ) const;
 
-    // Sensör bilgisi (connect() sonrası geçerli)
     unsigned int resolution() const
     {
         return m_resolution;
     }
+
     TScannerType scannerType() const
     {
         return m_scannerType;
     }
+
     std::string getLastError() const
     {
         return m_lastError;
     }
 
+    bool isConnected() const
+    {
+        return m_connected;
+    }
+
+    void setProfileRateHz(int hz);
+    void setExposureTimeUs(int us);
+    void setAutoExposure(bool enabled);
+    void setMeasuringField(const std::string& field);
+    void setPointsPerProfile(unsigned int points);
+
+    int profileRateHz() const
+    {
+        return m_profileRateHz;
+    }
+
+    int exposureTimeUs() const
+    {
+        return m_exposureTimeUs;
+    }
+
+    bool autoExposure() const
+    {
+        return m_autoExposure;
+    }
+
+    std::string measuringField() const
+    {
+        return m_measuringField;
+    }
+
+    unsigned int pointsPerProfile() const
+    {
+        return m_pointsPerProfile;
+    }
+
+private:
+    bool applyAcquisitionSettings();
+    bool validateTiming(std::string* err = nullptr) const;
+    unsigned int chooseResolutionFromPoints(unsigned int points) const;
+    DWORD buildExposureValue() const;
+    DWORD buildMeasuringFieldValue() const;
+
 private:
     std::string m_dllPath;
     std::string m_lastError;
-    CInterfaceLLT* m_llt       = nullptr;
-    IDataSink* m_sink          = nullptr;
-    bool m_connected           = false;
+
+    CInterfaceLLT* m_llt = nullptr;
+    IDataSink* m_sink    = nullptr;
+
+    bool m_connected = false;
+    bool m_acquiring = false;
+
     unsigned int m_resolution  = 0;
     TScannerType m_scannerType = StandardType;
+
+    int m_profileRateHz             = 100;
+    int m_exposureTimeUs            = 100;
+    bool m_autoExposure             = true;
+    std::string m_measuringField    = "large";
+    unsigned int m_pointsPerProfile = 1280;
 };
