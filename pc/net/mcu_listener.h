@@ -1,23 +1,34 @@
 ﻿#pragma once
 #include <atomic>
+#include <cstdint>
 #include <functional>
+#include <mutex>
+#include <queue>
 #include <thread>
-
-#include "../core/i_data_sink.h"
 
 class McuListener
 {
 public:
-    using PacketCallback = std::function<void(uint32_t seq, float y_mm)>;
+    struct TriggerEvent
+    {
+        uint32_t session_id;
+        uint32_t seq;
+        uint32_t encoder_count;
+        int32_t angle_mdeg;
+        uint64_t tick_us;
+    };
 
-    McuListener(int port, IDataSink* sink = nullptr);
+    using PacketCallback = std::function<void(const TriggerEvent&)>;
+
+    explicit McuListener(int port);
     ~McuListener();
 
     void start();
     void stop();
 
-    // UI'ya veri iletmek icin: arka plan thread'inden guvenli sekilde cagrilir.
-    // Qt'de queued connection ile kullanilmali (signal uzerinden).
+    bool tryGetTriggerEvent(TriggerEvent& evt);
+    size_t queueSize() const;
+
     void setPacketCallback(PacketCallback cb)
     {
         m_packetCb = std::move(cb);
@@ -27,8 +38,10 @@ private:
     void listenLoop();
 
     int m_port;
-    IDataSink* m_sink;         // Sahiplik yok
-    PacketCallback m_packetCb; // UI callback (optional)
-    std::atomic<bool> m_running;
+    PacketCallback m_packetCb;
+    std::atomic<bool> m_running{false};
     std::thread m_worker;
+
+    mutable std::mutex m_queueMutex;
+    std::queue<TriggerEvent> m_queue;
 };
