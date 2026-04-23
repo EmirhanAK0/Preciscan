@@ -27,7 +27,7 @@ void VisualizerWidget::addPoints(const QVector<QVector3D>& points)
     update();
 }
 
-void VisualizerWidget::addProfile(float theta_deg, const QVector<QPointF>& profile)
+void VisualizerWidget::addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ, float xOffset)
 {
     float theta_rad = theta_deg * (M_PI / 180.0f);
     float cosA      = std::cos(theta_rad);
@@ -35,8 +35,18 @@ void VisualizerWidget::addProfile(float theta_deg, const QVector<QPointF>& profi
 
     for (const auto& p : profile)
     {
-        // p.x() = r, p.y() = z
-        m_points.push_back(QVector3D(p.x() * cosA, p.x() * sinA, p.y()));
+        // 2D raw profil degerleri:
+        // Lazer YANA (sideways) monte edilmis ve cizgi DIKEY (vertical).
+        // Bu yuzden:
+        // p.x() = Lazer cizgisi uzerindeki konum -> Gercek dunya Yuksekligi (Z)
+        // p.y() = Lazerin objeye mesafesi       -> Gercek dunya Yaricapi (R)
+
+        float z = p.x() - xOffset; // Lazerin asagi/yukari kayikligi
+        float r = tableZ - p.y();  // tableZ: Lazer ile donus merkezi arasindaki yatay mesafe
+
+        if (r < 0.0f) continue; // Merkezden daha uzaktaki (arkaplan) gurultuleri yoksay
+
+        m_points.push_back(QVector3D(r * cosA, r * sinA, z));
     }
     update();
 }
@@ -140,9 +150,24 @@ void VisualizerWidget::drawPoints()
     glBegin(GL_POINTS);
     for (const auto& p : m_points)
     {
-        // Yukseklige gore renk gradyani (Z: 0 - 100)
-        float factor = qBound(0.0f, p.z() / 150.0f, 1.0f);
-        glColor3f(factor * 0.5f, 1.0f - factor * 0.5f, 1.0f); // Mavi-Turkuaz-Beyazimsi tonlar
+        // Yukseklige gore Heatmap renk gradyani (Z: 0 - 30 mm arasi)
+        // Mavi (Alcak) -> Yesil (Orta) -> Kirmizi (Yuksek)
+        float factor = qBound(0.0f, p.z() / 30.0f, 1.0f);
+        
+        float r = 0.0f, g = 0.0f, b = 0.0f;
+        if (factor < 0.5f) {
+            b = 1.0f - (factor * 2.0f); // Maviden
+            g = factor * 2.0f;          // Yesile
+        } else {
+            g = 1.0f - ((factor - 0.5f) * 2.0f); // Yesilden
+            r = ((factor - 0.5f) * 2.0f);        // Kirmiziya
+        }
+        // Noktalari biraz daha parlak tutalim
+        r = qBound(0.2f, r, 1.0f);
+        g = qBound(0.2f, g, 1.0f);
+        b = qBound(0.2f, b, 1.0f);
+
+        glColor3f(r, g, b);
         glVertex3f(p.x(), p.y(), p.z());
     }
     glEnd();

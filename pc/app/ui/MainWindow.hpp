@@ -11,6 +11,7 @@ class McuListener;
 class LaserManager;
 class SPSCRingBuffer;
 class ConnectingOverlay;
+class QComboBox;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -39,6 +40,7 @@ private:
     // Toolbar butonlari
     QPushButton* m_mcuBtn;
     QPushButton* m_laserBtn;
+    QComboBox* m_comPortCombo;
 
     // StatusBar etiketleri
     QLabel* m_stateLabel;

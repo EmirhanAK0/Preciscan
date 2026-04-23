@@ -8,6 +8,15 @@
 #include <QVector3D>
 #include <atomic>
 
+#include "../../io/serial_trigger_reader.h"
+
+/// Tarama tetik kaynağı
+enum class ScanTriggerMode {
+    TimeBased,      ///< Dahili zamanlayıcı (orijinal davranış)
+    Encoder,        ///< MCU'dan gelen enkoder açısı tetikler
+    ExternalTrigger ///< Harici dijital tetik sinyali (ayrı pin)
+};
+
 class McuListener;
 class LaserManager;
 class SPSCRingBuffer;
@@ -41,6 +50,8 @@ public:
     QString laserMeasuringField() const { return m_laserMeasuringField; }
     int laserPointsPerProfile() const { return m_laserPointsPerProfile; }
 
+    ScanTriggerMode triggerMode() const { return m_triggerMode; }
+
 public slots:
     void connectMcu();
     void disconnectMcu();
@@ -57,6 +68,15 @@ public slots:
     void setLaserAutoShutter(bool enabled);
     void setLaserMeasuringField(const QString& field);
     void setLaserPointsPerProfile(int points);
+    void setTriggerMode(ScanTriggerMode mode);
+    void setSerialPort(const QString& portName); ///< Enkoder mod icin COM port (orn. "COM3")
+
+    /// Enkoder modunda: MCU tarafından her tetik geldiğinde çağrılır.
+    /// angleDeg = enkoderin ölçtüğü gerçek açı (derece).
+    void onEncoderTrigger(float angleDeg);
+
+    void connectMcuSerial(); ///< Serial port üzerinden MCU bağlantısı kur
+    void disconnectMcuSerial(); ///< Serial bağlantıyı kes
 
     void startScan();
     void stopScan();
@@ -75,6 +95,7 @@ signals:
     void pointCloudReady(const QVector<QVector3D>& cloud);
     void meshLoaded(const QVector<QVector3D>& triangles);
     void logMessage(const QString& level, const QString& msg);
+    void triggerModeChanged(ScanTriggerMode mode);
 
 private slots:
     void consumeHardwarePackets();
@@ -106,6 +127,11 @@ private:
 
     QTimer* m_hwTimer{nullptr};
     float m_hwAngle{0.0f};
+
+    ScanTriggerMode m_triggerMode{ScanTriggerMode::TimeBased};
+
+    QString m_serialPort{"COM3"};
+    SerialTriggerReader* m_serialReader{nullptr};
 
     std::atomic<bool> m_mcuConnected{false};
     std::atomic<bool> m_laserConnected{false};

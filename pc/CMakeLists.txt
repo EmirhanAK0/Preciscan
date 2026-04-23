@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.16)
 project(PreciscanCore)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -41,6 +41,7 @@ add_executable(acquire_cli
     tools/acquire_cli/main.cpp
     io/replay_reader.cpp
     io/disk_writer.cpp
+    io/serial_trigger_reader.cpp
 )
 target_include_directories(acquire_cli PRIVATE io/)
 target_link_libraries(acquire_cli PRIVATE preciscan_net preciscan_hw)
@@ -85,6 +86,7 @@ if(Qt6_FOUND)
         app/controller/ScanController.cpp
         io/stl_loader.cpp
         io/ply_writer.cpp
+        io/serial_trigger_reader.cpp
         sim/mesh_slicer.cpp
         sim/laser_sim_worker.cpp
     )

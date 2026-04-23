@@ -2,12 +2,15 @@
 
 #include <QWidget>
 
+#include "../../controller/ScanController.hpp"
+
 class ScanController;
 class QDoubleSpinBox;
 class QSpinBox;
 class QCheckBox;
 class QComboBox;
 class QPushButton;
+class QLabel;
 
 class SetupPanel : public QWidget {
     Q_OBJECT
@@ -35,6 +38,7 @@ private:
 
     QComboBox* m_measuringFieldCombo = nullptr;
     QComboBox* m_pointsPerProfileCombo = nullptr;
+    QComboBox* m_triggerModeCombo = nullptr;
 
     QPushButton* m_applyBtn = nullptr;
     QPushButton* m_readBtn = nullptr;

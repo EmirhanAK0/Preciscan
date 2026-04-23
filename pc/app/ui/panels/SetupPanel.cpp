@@ -6,6 +6,7 @@
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
@@ -125,6 +126,46 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     buttonRow->addWidget(m_applyBtn);
 
     layout->addWidget(group);
+
+    // ── Tetik Modu ──────────────────────────────────────────────
+    auto* trigGroup = new QGroupBox("Tetik Modu", this);
+    trigGroup->setStyleSheet(
+        "QGroupBox {"
+        "  color: #5af;"
+        "  font-weight: bold;"
+        "  border: 1px solid #1a3a5a;"
+        "  margin-top: 10px;"
+        "  padding-top: 15px;"
+        "}"
+    );
+
+    auto* trigForm = new QFormLayout(trigGroup);
+    trigForm->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    trigForm->setHorizontalSpacing(14);
+    trigForm->setVerticalSpacing(10);
+
+    m_triggerModeCombo = new QComboBox(this);
+    m_triggerModeCombo->addItem("Time-Based (Zamanlay\u0131c\u0131)",
+                                QVariant::fromValue(static_cast<int>(ScanTriggerMode::TimeBased)));
+    m_triggerModeCombo->addItem("Encoder Trigger (Enkoder)",
+                                QVariant::fromValue(static_cast<int>(ScanTriggerMode::Encoder)));
+    m_triggerModeCombo->addItem("External Trigger (Harici)",
+                                QVariant::fromValue(static_cast<int>(ScanTriggerMode::ExternalTrigger)));
+    applySpinStyle(m_triggerModeCombo);
+
+    auto* trigInfoLabel = new QLabel(
+        "<ul style='color:#777;font-size:9px;margin:0;padding-left:14px;'>"
+        "<li><b style='color:#aaa'>Time-Based:</b> Dahili zamanlayici ile sabit adim</li>"
+        "<li><b style='color:#5af'>Encoder:</b> MCU enkoder acisi her profilin konumunu belirler</li>"
+        "<li><b style='color:#fa5'>External:</b> Harici dijital tetik sinyali ile tek profil</li>"
+        "</ul>",
+        this);
+    trigInfoLabel->setWordWrap(true);
+
+    trigForm->addRow("Mod:", m_triggerModeCombo);
+    trigForm->addRow(trigInfoLabel);
+
+    layout->addWidget(trigGroup);
     layout->addLayout(buttonRow);
     layout->addStretch();
 
@@ -168,6 +209,10 @@ void SetupPanel::onApplyClicked()
     m_ctrl->setLaserAutoShutter(m_autoShutterCheck->isChecked());
     m_ctrl->setLaserMeasuringField(m_measuringFieldCombo->currentText());
     m_ctrl->setLaserPointsPerProfile(m_pointsPerProfileCombo->currentText().toInt());
+
+    // Tetik modunu uygula
+    const int modeIdx = m_triggerModeCombo->currentData().toInt();
+    m_ctrl->setTriggerMode(static_cast<ScanTriggerMode>(modeIdx));
 }
 
 void SetupPanel::onReadClicked()
@@ -182,4 +227,8 @@ void SetupPanel::onReadClicked()
     m_autoShutterCheck->setChecked(m_ctrl->laserAutoShutter());
     m_measuringFieldCombo->setCurrentText(m_ctrl->laserMeasuringField());
     m_pointsPerProfileCombo->setCurrentText(QString::number(m_ctrl->laserPointsPerProfile()));
+
+    // Tetik modunu oku
+    const int modeIdx = static_cast<int>(m_ctrl->triggerMode());
+    m_triggerModeCombo->setCurrentIndex(modeIdx);
 }

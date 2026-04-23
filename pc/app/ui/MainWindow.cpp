@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 
+#include <QComboBox>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -69,15 +70,28 @@ void MainWindow::setupToolBar()
                       "QPushButton { border-radius: 4px; font-size: 10px; font-weight: bold; "
                       "padding: 5px 12px; min-width: 90px; }");
 
+    m_comPortCombo = new QComboBox(this);
+    for (int i = 1; i <= 15; ++i) {
+        m_comPortCombo->addItem(QString("COM%1").arg(i));
+    }
+    m_comPortCombo->setStyleSheet(
+        "QComboBox { background: #1a1a1a; color: #ccc; border: 1px solid #333; border-radius: 4px; padding: 4px; font-size: 10px; }"
+    );
+    // Varsayilan COM portunu ayarla
+    m_comPortCombo->setCurrentText("COM3");
+    tb->addWidget(m_comPortCombo);
+
     m_mcuBtn = new QPushButton("MCU  Baglan", this);
     m_mcuBtn->setCheckable(true);
     connect(m_mcuBtn, &QPushButton::clicked, this,
             [this](bool checked)
             {
-                if (checked)
-                    m_scanController->connectMcu();
-                else
-                    m_scanController->disconnectMcu();
+                if (checked) {
+                    m_scanController->setSerialPort(m_comPortCombo->currentText());
+                    m_scanController->connectMcuSerial();
+                } else {
+                    m_scanController->disconnectMcuSerial();
+                }
             });
     tb->addWidget(m_mcuBtn);
 
@@ -159,8 +173,8 @@ void MainWindow::setupCentralWidget()
 
     // Simulation signals -> 3D Visualizer
     connect(m_scanController, &ScanController::simProfileReceived, viz,
-            [viz](float theta, const QVector<QPointF>& profile)
-            { viz->addProfile(theta, profile); });
+            [this, viz](float theta, const QVector<QPointF>& profile)
+            { viz->addProfile(theta, profile, m_scanController->dOffset(), 3.5f); });
     // Simulation signals -> 2D Profile Widget
     connect(m_scanController, &ScanController::simProfileReceived, profileWidget,
             &ProfileWidget::updateProfile);
@@ -206,7 +220,7 @@ void MainWindow::setupCentralWidget()
                     mcuCounter = 0;
                     scanPanel->appendLog(
                         "MCU",
-                        QString("Sinyal Aliniyor... Tetik:%1 Y:%2 mm").arg(seq).arg(y, 0, 'f', 2));
+                        QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg").arg(seq).arg(y, 0, 'f', 2));
                 }
             });
 

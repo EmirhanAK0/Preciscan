@@ -9,6 +9,13 @@
 class LaserManager
 {
 public:
+    enum class TriggerMode
+    {
+        Internal,
+        ExternalDigitalIn
+    };
+
+public:
     LaserManager(const std::string& dllPath = "LLT.dll", IDataSink* sink = nullptr);
     ~LaserManager();
 
@@ -48,6 +55,7 @@ public:
     void setAutoExposure(bool enabled);
     void setMeasuringField(const std::string& field);
     void setPointsPerProfile(unsigned int points);
+    void setTriggerMode(TriggerMode mode);
 
     int profileRateHz() const
     {
@@ -74,12 +82,18 @@ public:
         return m_pointsPerProfile;
     }
 
+    TriggerMode triggerMode() const
+    {
+        return m_triggerMode;
+    }
+
 private:
     bool applyAcquisitionSettings();
     bool validateTiming(std::string* err = nullptr) const;
     unsigned int chooseResolutionFromPoints(unsigned int points) const;
     DWORD buildExposureValue() const;
     DWORD buildMeasuringFieldValue() const;
+    DWORD buildTriggerValue() const;
 
 private:
     std::string m_dllPath;
@@ -99,4 +113,5 @@ private:
     bool m_autoExposure             = true;
     std::string m_measuringField    = "large";
     unsigned int m_pointsPerProfile = 1280;
+    TriggerMode m_triggerMode       = TriggerMode::Internal;
 };

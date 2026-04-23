@@ -33,6 +33,12 @@ ScanController::~ScanController()
         delete m_simWorker;
         m_simWorker = nullptr;
     }
+    
+    if (m_serialReader) {
+        m_serialReader->stop();
+        delete m_serialReader;
+        m_serialReader = nullptr;
+    }
 }
 
 void ScanController::connectMcu()
@@ -45,6 +51,45 @@ void ScanController::disconnectMcu()
 {
     m_mcuConnected = false;
     emit mcuConnectionChanged(false);
+}
+
+void ScanController::setSerialPort(const QString& portName)
+{
+    m_serialPort = portName;
+    emit logMessage("SYS", QString("Serial port ayarlandi: %1").arg(portName));
+}
+
+void ScanController::connectMcuSerial()
+{
+    if (m_serialReader) {
+        m_serialReader->stop();
+        delete m_serialReader;
+    }
+
+    m_serialReader = new SerialTriggerReader(m_serialPort.toStdString(), 115200);
+    if (m_serialReader->start()) {
+        m_mcuConnected = true;
+        emit mcuConnectionChanged(true);
+        emit logMessage("OK", QString("MCU (Serial) baglandi: %1").arg(m_serialPort));
+    } else {
+        m_mcuConnected = false;
+        emit mcuConnectionChanged(false);
+        emit logMessage("ERR", QString("MCU (Serial) baglanamadi: %1").arg(m_serialPort));
+        delete m_serialReader;
+        m_serialReader = nullptr;
+    }
+}
+
+void ScanController::disconnectMcuSerial()
+{
+    if (m_serialReader) {
+        m_serialReader->stop();
+        delete m_serialReader;
+        m_serialReader = nullptr;
+    }
+    m_mcuConnected = false;
+    emit mcuConnectionChanged(false);
+    emit logMessage("SYS", "MCU (Serial) baglantisi kesildi.");
 }
 
 bool ScanController::validateLaserTiming(QString* errorMsg) const
@@ -93,6 +138,18 @@ void ScanController::connectLaser()
     m_laser->setAutoExposure(m_laserAutoShutter);
     m_laser->setMeasuringField(m_laserMeasuringField.toStdString());
     m_laser->setPointsPerProfile(static_cast<unsigned int>(m_laserPointsPerProfile));
+
+    // Tarama mod'una gore lazer donanim trigger'ini ayarla:
+    // Encoder veya ExternalTrigger modunda lazer Arduino'dan gelen
+    // elektriksel sinyali beklemeli (ExternalDigitalIn).
+    // TimeBased modunda lazer kendi ic zamanlayicisiyla tetiklenir (Internal).
+    if (m_triggerMode == ScanTriggerMode::TimeBased) {
+        m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
+        emit logMessage("SYS", "Lazer tetik: Internal (Time-Based)");
+    } else {
+        m_laser->setTriggerMode(LaserManager::TriggerMode::ExternalDigitalIn);
+        emit logMessage("SYS", "Lazer tetik: ExternalDigitalIn (Arduino sinyali bekleniyor)");
+    }
 
     if (!m_laser->connect()) {
         emit logMessage("ERR",
@@ -227,7 +284,16 @@ void ScanController::startScan()
     if (m_isSimMode && m_simWorker) {
         m_simWorker->start();
     } else if (m_ring) {
+        // QTimer her modda baslatiilir (interval=0, yani event-loop bos oldugca calisir).
+        // consumeHardwarePackets() icinde mod'a gore TimeBased veya Encoder/External
+        // isleme dallarina ayrilir.
         m_hwTimer->start();
+        if (m_triggerMode == ScanTriggerMode::TimeBased)
+            emit logMessage("SYS", "Tarama basladi: Time-Based mod");
+        else if (m_triggerMode == ScanTriggerMode::Encoder)
+            emit logMessage("SYS", "Tarama basladi: Encoder Trigger mod — MCU tetik bekleniyor");
+        else
+            emit logMessage("SYS", "Tarama basladi: External Trigger mod — harici sinyal bekleniyor");
     }
 
     emit scanStarted();
@@ -249,9 +315,43 @@ void ScanController::stopScan()
 
 void ScanController::consumeHardwarePackets()
 {
+    // Bu slot yalnizca TimeBased modda QTimer tarafindan cagirilir.
     if (!m_ring || !m_scanning || !m_laser)
         return;
 
+    // ----- Enkoder / External Trigger modu: MCU tetik olaylarini isle -----
+    // Bu dalda QTimer hala calisabilir (interval=0) ama sadece MCU
+    // kuyrugunu bosaltmak icin kullanilir.
+    if (m_triggerMode != ScanTriggerMode::TimeBased) {
+        static constexpr int MAX_EVENTS = 8;
+        int evtCount = 0;
+        
+        // 1. UDP uzerinden MCU (eski yontem, varsa)
+        if (m_mcu) {
+            McuListener::TriggerEvent evt;
+            while (evtCount < MAX_EVENTS && m_mcu->tryGetTriggerEvent(evt)) {
+                ++evtCount;
+                const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
+                emit mcuPacketReceived(evt.seq, angleDeg);
+                onEncoderTrigger(angleDeg);
+            }
+        }
+        
+        // 2. Serial port uzerinden MCU (Arduino)
+        if (m_serialReader) {
+            SerialTriggerReader::TriggerEvent evt;
+            while (evtCount < MAX_EVENTS && m_serialReader->tryGetTriggerEvent(evt)) {
+                ++evtCount;
+                const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
+                emit mcuPacketReceived(evt.seq, angleDeg);
+                onEncoderTrigger(angleDeg);
+            }
+        }
+        
+        return; // TimeBased profil tüketimi yapmaz
+    }
+
+    // ----- Time-Based modu: sabit açi adimi ile ring buffer'dan profil al -----
     static constexpr int MAX_PER_TICK = 4;
     Packet pkt;
     int processed = 0;
@@ -289,6 +389,48 @@ void ScanController::consumeHardwarePackets()
             if (m_hwAngle >= 360.0f)
                 m_hwAngle = 0.0f;
         }
+    }
+}
+
+void ScanController::onEncoderTrigger(float angleDeg)
+{
+    // Enkoder ve ExternalTrigger modlari icin: her tetik geldiginde
+    // donanim lazerden bir profil alinir ve o anki enkoder acisiyla 3D'ye eklenir.
+    if (!m_scanning || m_isSimMode)
+        return;
+
+    if (m_triggerMode == ScanTriggerMode::TimeBased)
+        return; // Bu modda zamanlayici kullaniliyor, bu slot ihmal edilir.
+
+    if (!m_ring || !m_laser)
+        return;
+
+    static std::vector<double> vX, vZ;
+
+    Packet pkt;
+    if (!m_ring->try_pop(pkt) || pkt.data.empty())
+        return;
+
+    const bool ok = m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ);
+    if (!ok)
+        return;
+
+    const unsigned int res = m_laser->resolution();
+    QVector<QPointF> profile;
+    profile.reserve(static_cast<int>(res));
+
+    for (unsigned int i = 0; i < res; ++i) {
+        const double x = vX[i];
+        const double z = vZ[i];
+        if (x == 0.0 && z == 0.0)
+            continue;
+
+        profile.push_back(QPointF(x, z));
+    }
+
+    if (!profile.isEmpty()) {
+        // Gercek enkoder acisiyla profili 3D alana ekle
+        emit simProfileReceived(angleDeg, profile);
     }
 }
 
@@ -370,6 +512,20 @@ void ScanController::setLaserPointsPerProfile(int points)
 {
     m_laserPointsPerProfile = points;
     emit logMessage("SYS", QString("Profil nokta sayisi guncellendi: %1").arg(m_laserPointsPerProfile));
+}
+
+void ScanController::setTriggerMode(ScanTriggerMode mode)
+{
+    if (m_triggerMode == mode)
+        return;
+
+    m_triggerMode = mode;
+
+    static const char* names[] = {"Time-Based", "Encoder", "External Trigger"};
+    emit logMessage("SYS",
+                    QString("Tetik modu degistirildi: %1")
+                        .arg(names[static_cast<int>(mode)]));
+    emit triggerModeChanged(mode);
 }
 
 void ScanController::rebuildSimWorkerIfPossible()

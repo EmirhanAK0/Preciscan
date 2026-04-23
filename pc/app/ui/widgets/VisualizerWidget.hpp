@@ -13,7 +13,7 @@ public:
 public slots:
     void clearPoints();
     void addPoints(const QVector<QVector3D>& points);
-    void addProfile(float theta_deg, const QVector<QPointF>& profile);
+    void addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ = 66.0f, float xOffset = 3.5f);
     void setMesh(const QVector<QVector3D>& triangles); // 3'erli gruplar halinde v0,v1,v2
 
 protected:

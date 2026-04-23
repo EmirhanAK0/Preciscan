@@ -134,8 +134,12 @@ bool LaserManager::applyAcquisitionSettings()
     std::cout << "[LAZER] SetFeature(ROI1_PRESET=" << measuringFieldValue << ") = " << retField << "\n";
 
     // 3) Trigger + profile config
-    int retTrig = m_llt->SetFeature(FEATURE_FUNCTION_TRIGGER, TRIG_INTERNAL);
-    std::cout << "[LAZER] SetFeature(TRIGGER=INTERNAL) = " << retTrig << "\n";
+    DWORD trig = buildTriggerValue();
+m_llt->SetFeature(FEATURE_FUNCTION_TRIGGER, trig);
+
+std::cout << "[LAZER] SetFeature(TRIGGER=" 
+          << (m_triggerMode == TriggerMode::Internal ? "INTERNAL" : "EXTERNAL")
+          << ") = " << trig << "\n";
 
     int retCfg = m_llt->SetProfileConfig(PROFILE);
     std::cout << "[LAZER] SetProfileConfig(PROFILE) = " << retCfg << "\n";
@@ -156,6 +160,21 @@ bool LaserManager::applyAcquisitionSettings()
 
     m_lastError.clear();
     return true;
+}
+
+DWORD LaserManager::buildTriggerValue() const
+{
+    if (m_triggerMode == TriggerMode::Internal)
+    {
+        return TRIG_INTERNAL;
+    }
+    else
+    {
+        return TRIG_EXT_ACTIVE
+             | TRIG_INPUT_DIGIN
+             | TRIG_MODE_EDGE
+             | TRIG_POLARITY_HIGH;
+    }
 }
 
 bool LaserManager::connect()
@@ -285,6 +304,11 @@ bool LaserManager::convertProfile(const unsigned char* data,
                                            nullptr);
 
     return (ret & CONVERT_X) && (ret & CONVERT_Z);
+}
+
+void LaserManager::setTriggerMode(TriggerMode mode)
+{
+    m_triggerMode = mode;
 }
 
 void LaserManager::setProfileRateHz(int hz)

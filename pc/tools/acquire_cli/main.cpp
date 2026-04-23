@@ -1,8 +1,8 @@
 ﻿#include "config.h"
 #include "laser_manager.h"
-#include "mcu_listener.h"
 #include "ring_buffer_sink.h"
 #include "spsc_ring_buffer.h"
+#include "serial_trigger_reader.h"
 
 #include <atomic>
 #include <chrono>
@@ -17,7 +17,7 @@
 
 struct MatchedFrame
 {
-    McuListener::TriggerEvent trigger;
+    SerialTriggerReader::TriggerEvent trigger;
     Packet profile;
 };
 
@@ -35,21 +35,26 @@ int main(int argc, char** argv)
     }
 
     std::cout << "========================================\n";
-    std::cout << "   PRECISCAN CORE v2.2 (DUAL-STREAM)   \n";
+    std::cout << "   PRECISCAN CORE v2.3 (SERIAL+LASER)  \n";
     std::cout << "========================================\n";
     std::cout << "Mod: " << cfg.mode << " | Port: " << cfg.port << "\n\n";
 
     if (cfg.mode == "mcu")
     {
-        McuListener mcu(cfg.port);
-        mcu.start();
+        SerialTriggerReader mcu("COM9", 115200);
+
+        if (!mcu.start())
+        {
+            std::cerr << "[ANA] Serial acilamadi!\n";
+            return 1;
+        }
 
         std::atomic<uint64_t> total_triggers{0};
         std::atomic<bool> monitor_running{true};
 
         std::thread monitor([&]()
         {
-            McuListener::TriggerEvent evt;
+            SerialTriggerReader::TriggerEvent evt;
             while (monitor_running)
             {
                 while (mcu.tryGetTriggerEvent(evt))
@@ -65,13 +70,14 @@ int main(int argc, char** argv)
             }
         });
 
-        std::cout << "\n[ANA] MCU dinleniyor (UDP port " << cfg.port << ").\n";
+        std::cout << "\n[ANA] MCU serial dinleniyor (COM9).\n";
         std::cout << "[ANA] Durdurmak icin Enter'a basin...\n";
         std::cin.get();
 
         std::cout << "\n[ANA] Durduruluyor...\n";
         monitor_running = false;
         mcu.stop();
+
         if (monitor.joinable())
             monitor.join();
 
@@ -83,10 +89,16 @@ int main(int argc, char** argv)
         SPSCRingBuffer ring(256);
         RingBufferSink sink(ring);
 
-        McuListener mcu(cfg.port);
-        mcu.start();
+        SerialTriggerReader mcu("COM9", 115200);
+
+        if (!mcu.start())
+        {
+            std::cerr << "[ANA] Serial acilamadi!\n";
+            return 1;
+        }
 
         LaserManager laser("LLT.dll", &sink);
+        laser.setTriggerMode(LaserManager::TriggerMode::ExternalDigitalIn);
         bool laser_connected = false;
 
         if (laser.init())
@@ -99,7 +111,7 @@ int main(int argc, char** argv)
             }
             else
             {
-                std::cout << ">>> UYARI: Lazer bulunamadi, sadece MCU dinleniyor.\n";
+                std::cout << ">>> UYARI: Lazer bulunamadi, sadece serial trigger dinleniyor.\n";
             }
         }
         else
@@ -125,10 +137,10 @@ int main(int argc, char** argv)
             }
 
             std::queue<Packet> profileQueue;
-            std::queue<McuListener::TriggerEvent> triggerQueue;
+            std::queue<SerialTriggerReader::TriggerEvent> triggerQueue;
 
             Packet pkt;
-            McuListener::TriggerEvent evt;
+            SerialTriggerReader::TriggerEvent evt;
 
             while (true)
             {
