@@ -275,6 +275,19 @@ void ScanController::startScan()
     if (m_scanning)
         return;
 
+    // Scan başlamadan önce birikmiş eski trigger event'lerini temizle.
+    // MCU bağlı olduğu andan itibaren kuyruk dolmaya başlar; scan başladığında
+    // bunlar toplu işlenirse tüm profiller birden yerleşir ("ani halka" artefaktı).
+    {
+        SerialTriggerReader::TriggerEvent sEvt;
+        while (m_serialReader && m_serialReader->tryGetTriggerEvent(sEvt)) {}
+
+        McuListener::TriggerEvent uEvt;
+        while (m_mcu && m_mcu->tryGetTriggerEvent(uEvt)) {}
+
+        emit logMessage("SYS", "Tetik kuyruklari temizlendi — gercek zamanli isleme basladi.");
+    }
+
     emit requestClearVisualizer();
 
     m_scanning = true;
