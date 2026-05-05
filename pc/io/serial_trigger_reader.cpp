@@ -28,6 +28,35 @@ SerialTriggerReader::~SerialTriggerReader()
     stop();
 }
 
+bool SerialTriggerReader::sendCommand(const std::string& cmd)
+{
+    std::lock_guard<std::mutex> lock(m_writeMutex);
+
+    if (!m_handle)
+    {
+        std::cerr << "[SERIAL] sendCommand: port acik degil\n";
+        return false;
+    }
+
+    // Satir sonu yoksa ekle
+    std::string data = cmd;
+    if (data.empty() || data.back() != '\n')
+        data.push_back('\n');
+
+    HANDLE h = static_cast<HANDLE>(m_handle);
+    DWORD written = 0;
+    BOOL ok = WriteFile(h, data.c_str(), (DWORD)data.size(), &written, nullptr);
+
+    if (!ok || written != (DWORD)data.size())
+    {
+        std::cerr << "[SERIAL] sendCommand yazma hatasi: " << GetLastError() << "\n";
+        return false;
+    }
+
+    std::cout << "[SERIAL] Gonderildi: " << cmd << "\n";
+    return true;
+}
+
 bool SerialTriggerReader::start()
 {
     if (m_running)

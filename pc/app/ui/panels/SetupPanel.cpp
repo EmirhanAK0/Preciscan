@@ -47,6 +47,14 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_dOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_dOffsetSpin);
 
+    m_lOffsetSpin = new QDoubleSpinBox(this);
+    m_lOffsetSpin->setRange(-100.0, 100.0);
+    m_lOffsetSpin->setDecimals(2);
+    m_lOffsetSpin->setSingleStep(0.5);
+    m_lOffsetSpin->setValue(0.0);
+    m_lOffsetSpin->setSuffix(" mm");
+    applySpinStyle(m_lOffsetSpin);
+
     m_resSpin = new QDoubleSpinBox(this);
     m_resSpin->setRange(0.01, 10.0);
     m_resSpin->setDecimals(2);
@@ -82,7 +90,8 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_pointsPerProfileCombo->addItems({"1280", "640", "320", "160"});
     applySpinStyle(m_pointsPerProfileCombo);
 
-    form->addRow("Lazer Ofseti (D):", m_dOffsetSpin);
+    form->addRow("Lazer Ofseti (Z):", m_dOffsetSpin);
+    form->addRow("Lateral Ofset (X):", m_lOffsetSpin);
     form->addRow("Tarama Cozunurlugu:", m_resSpin);
     form->addRow("Profiller / saniye:", m_profileRateSpin);
     form->addRow("Pozlama / Shutter:", m_shutterSpin);
@@ -203,6 +212,7 @@ void SetupPanel::onApplyClicked()
     }
 
     m_ctrl->setDOffset(static_cast<float>(m_dOffsetSpin->value()));
+    m_ctrl->setLateralOffset(static_cast<float>(m_lOffsetSpin->value()));
     m_ctrl->setResolution(static_cast<float>(m_resSpin->value()));
     m_ctrl->setLaserProfileRate(m_profileRateSpin->value());
     m_ctrl->setLaserShutterUs(m_shutterSpin->value());
@@ -221,6 +231,7 @@ void SetupPanel::onReadClicked()
         return;
 
     m_dOffsetSpin->setValue(m_ctrl->dOffset());
+    m_lOffsetSpin->setValue(m_ctrl->lateralOffset());
     m_resSpin->setValue(m_ctrl->resolution());
     m_profileRateSpin->setValue(m_ctrl->laserProfileRate());
     m_shutterSpin->setValue(m_ctrl->laserShutterUs());

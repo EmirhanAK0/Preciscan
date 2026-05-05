@@ -13,6 +13,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "../../io/ply_writer.h"
+
 #include "../controller/ScanController.hpp"
 #include "panels/DiagnosticsPanel.hpp"
 #include "panels/ScanPanel.hpp"
@@ -49,7 +51,12 @@ MainWindow::MainWindow(McuListener* mcu, LaserManager* laser, SPSCRingBuffer* ri
     connect(m_scanController, &ScanController::scanStarted, this,
             [this] { m_stateMachine->setState(AppState::Scanning); });
     connect(m_scanController, &ScanController::scanStopped, this,
-            [this] { m_stateMachine->setState(AppState::Idle); });
+            [this] {
+                m_stateMachine->setState(AppState::Idle);
+                if (m_viz && m_scanPanel && m_viz->pointCount() > 0) {
+                    m_scanPanel->addLayer(m_viz->getPoints());
+                }
+            });
 
     connect(m_scanController, &ScanController::mcuConnectionChanged, this,
             &MainWindow::onMcuConnectionChanged);
@@ -134,7 +141,8 @@ void MainWindow::setupCentralWidget()
     hLayout->setContentsMargins(0, 0, 0, 0);
     hLayout->setSpacing(0);
 
-    auto* viz           = new VisualizerWidget(this);
+    m_viz               = new VisualizerWidget(this);
+    auto* viz           = m_viz;
     auto* profileWidget = new ProfileWidget(this);
     profileWidget->setMinimumHeight(160);
     profileWidget->setMaximumHeight(280);
@@ -157,7 +165,8 @@ void MainWindow::setupCentralWidget()
         "QTabBar::tab:selected { background:#141414; color:#eee; border-bottom:2px solid #2ecc71; }"
         "QTabBar::tab:hover { color:#bbb; }");
 
-    auto* scanPanel  = new ScanPanel(m_scanController, this);
+    m_scanPanel  = new ScanPanel(m_scanController, this);
+    auto* scanPanel  = m_scanPanel;
     auto* setupPanel = new SetupPanel(m_scanController, this);
     auto* diagPanel  = new DiagnosticsPanel(this);
 
@@ -174,7 +183,7 @@ void MainWindow::setupCentralWidget()
     // Simulation signals -> 3D Visualizer
     connect(m_scanController, &ScanController::simProfileReceived, viz,
             [this, viz](float theta, const QVector<QPointF>& profile)
-            { viz->addProfile(theta, profile, m_scanController->dOffset(), 3.5f); });
+            { viz->addProfile(theta, profile, m_scanController->dOffset(), 3.5f, m_scanController->lateralOffset()); });
     // Simulation signals -> 2D Profile Widget
     connect(m_scanController, &ScanController::simProfileReceived, profileWidget,
             &ProfileWidget::updateProfile);
@@ -192,22 +201,6 @@ void MainWindow::setupCentralWidget()
             {
                 viz->clearPoints();
                 viz->addPoints(cloud);
-
-                QMessageBox msgBox(this);
-                msgBox.setWindowTitle("Tarama Tamamlandi");
-                msgBox.setText(
-                    QString("Tarama tamamlandi (%1 nokta). PLY olarak kaydetmek ister misiniz?")
-                        .arg(cloud.size()));
-                msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-                msgBox.setDefaultButton(QMessageBox::No);
-
-                if (msgBox.exec() == QMessageBox::Yes)
-                {
-                    QString path =
-                        QFileDialog::getSaveFileName(this, "Kaydet", "", "PLY Files (*.ply)");
-                    if (!path.isEmpty())
-                        m_scanController->saveCurrentScan(path);
-                }
             });
 
     // MCU log seyreltme
@@ -222,6 +215,13 @@ void MainWindow::setupCentralWidget()
                         "MCU",
                         QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg").arg(seq).arg(y, 0, 'f', 2));
                 }
+            });
+
+    // Katman birlestirme sonucu -> 3D Visualizer
+    connect(scanPanel, &ScanPanel::mergedCloudReady, this,
+            [this, viz](const QVector<QVector3D>& cloud) {
+                viz->clearPoints();
+                viz->addPoints(cloud);
             });
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
@@ -306,3 +306,5 @@ void MainWindow::onLaserConnectionChanged(bool connected)
             m_connectingOverlay->showError("Baglanilamadi");
     }
 }
+
+

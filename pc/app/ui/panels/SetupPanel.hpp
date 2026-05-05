@@ -29,6 +29,7 @@ private:
     ScanController* m_ctrl = nullptr;
 
     QDoubleSpinBox* m_dOffsetSpin = nullptr;
+    QDoubleSpinBox* m_lOffsetSpin = nullptr;
     QDoubleSpinBox* m_resSpin = nullptr;
 
     QSpinBox* m_profileRateSpin = nullptr;

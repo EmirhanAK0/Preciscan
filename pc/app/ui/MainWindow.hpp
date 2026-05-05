@@ -12,6 +12,8 @@ class LaserManager;
 class SPSCRingBuffer;
 class ConnectingOverlay;
 class QComboBox;
+class VisualizerWidget;
+class ScanPanel;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -49,4 +51,6 @@ private:
 
     QTabWidget*        m_tabWidget;
     ConnectingOverlay* m_connectingOverlay = nullptr;
+    VisualizerWidget*  m_viz               = nullptr;
+    ScanPanel*         m_scanPanel         = nullptr;
 };

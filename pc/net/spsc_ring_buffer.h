@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 // C4324: alignas(64) nedeniyle struct sonu dolduruldu -- kasitli optimizasyon.
 // head_ ve tail_ farkli cache line'larda olmali (false sharing onleme).
 #ifdef _MSC_VER
@@ -63,6 +63,15 @@ public:
             tail_.store((current_tail + 1) % capacity_, std::memory_order_release);
             return true;
         }
+    }
+
+    /// Drain all buffered packets so no stale data leaks into the next scan.
+    /// Safe to call from the consumer thread while the producer is idle.
+    void clear()
+    {
+        Packet dummy;
+        while (try_pop(dummy)) {}
+        drops_.store(0, std::memory_order_relaxed);
     }
 
     void stop()

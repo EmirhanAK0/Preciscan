@@ -28,6 +28,9 @@ public:
     bool tryGetTriggerEvent(TriggerEvent& evt);
     size_t queueSize() const;
 
+    /// Arduino'ya komut gonder (ornekin "ZMOVE:15.0\n")
+    bool sendCommand(const std::string& cmd);
+
 private:
     void readLoop();
     bool openPort();
@@ -45,4 +48,6 @@ private:
 
     mutable std::mutex m_queueMutex;
     std::queue<TriggerEvent> m_queue;
+
+    std::mutex m_writeMutex;
 };

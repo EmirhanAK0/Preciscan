@@ -10,10 +10,14 @@ class VisualizerWidget : public QOpenGLWidget, protected QOpenGLFunctions {
 public:
     explicit VisualizerWidget(QWidget* parent = nullptr);
 
+    /// Mevcut nokta bulutunu disa aktarim icin dondurur.
+    const QVector<QVector3D>& getPoints() const { return m_points; }
+    int pointCount() const { return m_points.size(); }
+
 public slots:
     void clearPoints();
     void addPoints(const QVector<QVector3D>& points);
-    void addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ = 66.0f, float xOffset = 3.5f);
+    void addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ = 66.0f, float zOffset = 3.5f, float lateralOffset = 0.0f);
     void setMesh(const QVector<QVector3D>& triangles); // 3'erli gruplar halinde v0,v1,v2
 
 protected:

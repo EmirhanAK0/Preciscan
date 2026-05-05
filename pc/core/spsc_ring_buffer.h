@@ -78,6 +78,20 @@ public:
         }
     }
 
+    /// Drain all buffered packets so no stale data leaks into the next scan.
+    void clear()
+    {
+        Packet dummy;
+        while (true) {
+            const size_t current_tail = tail_.load(std::memory_order_relaxed);
+            if (current_tail == head_.load(std::memory_order_acquire))
+                break;
+            buffer_[current_tail] = Packet{};
+            tail_.store((current_tail + 1) % capacity_, std::memory_order_release);
+        }
+        drops_.store(0, std::memory_order_relaxed);
+    }
+
     void stop()
     {
         stop_signal_.store(true, std::memory_order_relaxed);

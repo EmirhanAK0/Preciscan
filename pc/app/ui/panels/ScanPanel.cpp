@@ -1,7 +1,9 @@
 #include "ScanPanel.hpp"
+#include "LayerItemWidget.hpp"
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFrame>
 #include <QGridLayout>
@@ -14,9 +16,11 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QTextEdit>
+#include <QMessageBox>
 #include <QVBoxLayout>
 
 #include "../../controller/ScanController.hpp"
+#include "../../io/ply_writer.h"
 
 static QFrame* makeSep(QWidget* p)
 {
@@ -41,7 +45,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     root->setContentsMargins(10, 8, 10, 8);
     root->setSpacing(4);
 
-    // ── Ayarlar ─────────────────────────────────────────────────
+    // -- Ayarlar ------------------------------------------------
     root->addWidget(sectionLabel("AYARLAR", this));
 
     auto* grid = new QGridLayout;
@@ -92,7 +96,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     grid->addWidget(m_exposureSpin, 1, 2);
     root->addLayout(grid);
 
-    // ── Kontrol ──────────────────────────────────────────────────
+    // -- Kontrol ------------------------------------------------
     root->addWidget(makeSep(this));
     root->addWidget(sectionLabel("KONTROL", this));
 
@@ -124,21 +128,21 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     btnRow->addWidget(m_stopBtn, 0);
     root->addLayout(btnRow);
 
-    // ── Katmanlar ─────────────────────────────────────────────────
+    // -- Katmanlar -----------------------------------------------
     root->addWidget(makeSep(this));
     root->addWidget(sectionLabel("KATMANLAR", this));
 
     m_layerList = new QListWidget(this);
-    m_layerList->setMaximumHeight(110);
+    m_layerList->setMaximumHeight(150);
     m_layerList->setStyleSheet("QListWidget{background:#0d0d0d;color:#ccc;border:1px solid "
                                "#2a2a2a;border-radius:3px;font-size:10px;} "
-                               "QListWidget::item:selected{background:#1a3a5a;color:#5af;}");
-    m_layerList->setSelectionMode(QAbstractItemView::MultiSelection);
+                               "QListWidget::item{border:none;padding:0px;}");
+    m_layerList->setSelectionMode(QAbstractItemView::NoSelection);
     root->addWidget(m_layerList);
 
     auto* mergeRow = new QHBoxLayout;
     m_mergeMode    = new QComboBox(this);
-    m_mergeMode->addItems({"Ortalama", "Maksimum", "Birlestir"});
+    m_mergeMode->addItems({"Birlestir (Z-Offset)"});
     m_mergeMode->setStyleSheet("background:#1a1a1a;color:#ccc;border:1px solid "
                                "#333;border-radius:3px;padding:2px;font-size:10px;");
     m_mergeBtn = new QPushButton("Birlestir", this);
@@ -146,18 +150,93 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     m_mergeBtn->setStyleSheet("QPushButton{background:#1a2a3a;color:#5af;border:1px solid "
                               "#25f;border-radius:3px;padding:4px;font-size:10px;} "
                               "QPushButton:hover{background:#1e3a5a;}");
-    m_addLayerBtn = new QPushButton("+ Sil", this); // Simüle: STL Seç
-    m_addLayerBtn->setText("STL Sec");
+    m_addLayerBtn = new QPushButton("STL Sec", this);
     m_addLayerBtn->setFixedWidth(65);
     m_addLayerBtn->setStyleSheet(
         "QPushButton{background:#222;color:#777;border:1px solid "
         "#333;border-radius:3px;padding:4px;font-size:9px;} QPushButton:hover{color:#aaa;}");
+
+    m_exportPlyBtn = new QPushButton("PLY Disa Aktar", this);
+    m_exportPlyBtn->setFixedWidth(85);
+    m_exportPlyBtn->setStyleSheet(
+        "QPushButton{background:#1e3a24;color:#6fa;border:1px solid "
+        "#2a6;border-radius:3px;padding:4px;font-size:9px;font-weight:bold;} "
+        "QPushButton:hover{background:#2a4a34;}");
+
     mergeRow->addWidget(m_mergeMode, 1);
     mergeRow->addWidget(m_mergeBtn, 0);
+    mergeRow->addWidget(m_exportPlyBtn, 0);
     mergeRow->addWidget(m_addLayerBtn, 0);
     root->addLayout(mergeRow);
 
-    // ── Log ───────────────────────────────────────────────────────
+    // -- Z-Ekseni Kontrol ----------------------------------------
+    root->addWidget(makeSep(this));
+    root->addWidget(sectionLabel("Z-EKSENI KONTROL", this));
+
+    auto* zRow = new QHBoxLayout;
+    zRow->setSpacing(4);
+
+    auto* zLabel = new QLabel("Z:", this);
+    zLabel->setStyleSheet("color:#888;font-size:10px;");
+
+    m_zMoveSpin = new QDoubleSpinBox(this);
+    m_zMoveSpin->setRange(-100.0, 100.0);
+    m_zMoveSpin->setValue(15.0);
+    m_zMoveSpin->setSuffix(" mm");
+    m_zMoveSpin->setDecimals(1);
+    m_zMoveSpin->setSingleStep(1.0);
+    m_zMoveSpin->setStyleSheet(
+        "QDoubleSpinBox{background:#1a1a1a;color:#5af;border:1px solid #333;"
+        "border-radius:3px;padding:3px;font-size:10px;}");
+
+    m_zMoveBtn = new QPushButton("Hareket", this);
+    m_zMoveBtn->setStyleSheet(
+        "QPushButton{background:#1a2a3a;color:#5af;border:1px solid "
+        "#25f;border-radius:3px;padding:4px;font-size:10px;font-weight:bold;} "
+        "QPushButton:hover{background:#1e3a5a;}");
+    connect(m_zMoveBtn, &QPushButton::clicked, this,
+            [this]() {
+                if (m_ctrl) {
+                    float mm = static_cast<float>(m_zMoveSpin->value());
+                    m_ctrl->sendZMove(mm);
+                    appendLog("SYS", QString("Z ekseni %1 mm hareket komutu gonderildi").arg(mm, 0, 'f', 1));
+                }
+            });
+
+    m_zHomeBtn = new QPushButton("Z Home", this);
+    m_zHomeBtn->setStyleSheet(
+        "QPushButton{background:#2a2a1a;color:#da5;border:1px solid "
+        "#a83;border-radius:3px;padding:4px;font-size:9px;} "
+        "QPushButton:hover{background:#3a3a2a;color:#fc6;}");
+    connect(m_zHomeBtn, &QPushButton::clicked, this,
+            [this]() {
+                if (m_ctrl) {
+                    m_ctrl->sendZHome();
+                    appendLog("SYS", "Z homing komutu gonderildi");
+                }
+            });
+
+    m_linHomeBtn = new QPushButton("Homing", this);
+    m_linHomeBtn->setStyleSheet(
+        "QPushButton{background:#2a1a2a;color:#a5f;border:1px solid "
+        "#83a;border-radius:3px;padding:4px;font-size:9px;} "
+        "QPushButton:hover{background:#3a2a3a;color:#c6f;}");
+    connect(m_linHomeBtn, &QPushButton::clicked, this,
+            [this]() {
+                if (m_ctrl) {
+                    m_ctrl->sendLinHome();
+                    appendLog("SYS", "Lineer homing komutu gonderildi");
+                }
+            });
+
+    zRow->addWidget(zLabel);
+    zRow->addWidget(m_zMoveSpin, 1);
+    zRow->addWidget(m_zMoveBtn);
+    zRow->addWidget(m_zHomeBtn);
+    zRow->addWidget(m_linHomeBtn);
+    root->addLayout(zRow);
+
+    // -- Log -----------------------------------------------------
     root->addWidget(makeSep(this));
     root->addWidget(sectionLabel("LOG", this));
 
@@ -167,7 +246,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
                              "size:9px;border:1px solid #1a2a1a;border-radius:3px;");
     root->addWidget(m_logView, 1);
 
-    // ── Baglanti ─────────────────────────────────────────────────
+    // -- Baglanti ------------------------------------------------
     connect(m_startBtn, &QPushButton::clicked, this, &ScanPanel::onStartClicked);
     connect(m_stopBtn, &QPushButton::clicked, this, &ScanPanel::onStopClicked);
     connect(m_mergeBtn, &QPushButton::clicked, this, &ScanPanel::onMergeClicked);
@@ -182,6 +261,50 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
                 }
             });
 
+    connect(m_exportPlyBtn, &QPushButton::clicked, this, [this]() {
+        QVector<int> selectedIds;
+        for (int i = 0; i < m_layerList->count(); ++i) {
+            auto* item = m_layerList->item(i);
+            auto* widget = qobject_cast<LayerItemWidget*>(m_layerList->itemWidget(item));
+            if (widget && widget->isSelected()) {
+                selectedIds.append(widget->layerId());
+            }
+        }
+
+        if (selectedIds.isEmpty()) {
+            QMessageBox::warning(this, "Uyari", "Disa aktarmak icin en az bir katman secmelisiniz.");
+            return;
+        }
+
+        QVector<QVector3D> merged;
+        for (int id : selectedIds) {
+            if (!m_layers.contains(id)) continue;
+            const ScanLayerData& layer = m_layers[id];
+            float zOff = layer.zOffsetMm;
+            for (const auto& p : layer.points) {
+                merged.push_back(QVector3D(p.x(), p.y(), p.z() + zOff));
+            }
+        }
+
+        if (merged.isEmpty()) {
+            QMessageBox::warning(this, "Uyari", "Secilen katmanlarda nokta bulunamadi.");
+            return;
+        }
+
+        const QString path = QFileDialog::getSaveFileName(
+            this, "PLY Olarak Disa Aktar", "", "PLY Dosyasi (*.ply)");
+
+        if (path.isEmpty()) return;
+
+        if (io::writePLY(path, merged)) {
+            QMessageBox::information(this, "Basarili", QString("%1 nokta basariyla kaydedildi.").arg(merged.size()));
+            appendLog("SYS", QString("PLY disa aktarildi: %1 (%2 nokta)").arg(path).arg(merged.size()));
+        } else {
+            QMessageBox::critical(this, "Hata", "Dosya kaydedilirken bir hata olustu.");
+            appendLog("ERR", "PLY disa aktarma basarisiz.");
+        }
+    });
+
     if (m_ctrl)
     {
         connect(m_ctrl, &ScanController::scanStarted, this, &ScanPanel::onScanStarted);
@@ -194,6 +317,123 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     appendLog("SYS", "ScanPanel hazir.");
 }
+
+// ===================================================================
+// Katman yonetimi
+// ===================================================================
+
+void ScanPanel::addLayer(const QVector<QVector3D>& points)
+{
+    if (points.isEmpty())
+        return;
+
+    int id = m_nextLayerId++;
+    ScanLayerData layer;
+    layer.name = QString("Tarama %1").arg(id + 1);
+    layer.points = points;
+    layer.zOffsetMm = 0.0f;
+    m_layers.insert(id, layer);
+
+    rebuildLayerListUI();
+    appendLog("OK", QString("Katman eklendi: '%1' (%2 nokta)")
+                        .arg(layer.name)
+                        .arg(points.size()));
+}
+
+void ScanPanel::onDeleteLayer(int layerId)
+{
+    if (m_layers.contains(layerId)) {
+        QString name = m_layers[layerId].name;
+        m_layers.remove(layerId);
+        rebuildLayerListUI();
+        appendLog("SYS", QString("Katman silindi: '%1'").arg(name));
+    }
+}
+
+void ScanPanel::onLayerZOffsetChanged(int layerId, float mm)
+{
+    if (m_layers.contains(layerId)) {
+        m_layers[layerId].zOffsetMm = mm;
+    }
+}
+
+void ScanPanel::rebuildLayerListUI()
+{
+    m_layerList->clear();
+
+    for (auto it = m_layers.constBegin(); it != m_layers.constEnd(); ++it) {
+        int id = it.key();
+        const ScanLayerData& data = it.value();
+
+        auto* item = new QListWidgetItem(m_layerList);
+        auto* widget = new LayerItemWidget(id, data.name, data.points.size(), this);
+        widget->setZOffset(data.zOffsetMm);
+
+        connect(widget, &LayerItemWidget::deleteRequested,
+                this, &ScanPanel::onDeleteLayer);
+        connect(widget, &LayerItemWidget::zOffsetChanged,
+                this, &ScanPanel::onLayerZOffsetChanged);
+        connect(widget, &LayerItemWidget::nameChanged,
+                this, [this](int lid, const QString& newName) {
+                    if (m_layers.contains(lid))
+                        m_layers[lid].name = newName;
+                });
+
+        item->setSizeHint(widget->sizeHint());
+        m_layerList->setItemWidget(item, widget);
+    }
+}
+
+// ===================================================================
+// Birlestirme
+// ===================================================================
+
+void ScanPanel::onMergeClicked()
+{
+    // Secili katmanlari topla
+    QVector<int> selectedIds;
+    for (int i = 0; i < m_layerList->count(); ++i) {
+        auto* item = m_layerList->item(i);
+        auto* widget = qobject_cast<LayerItemWidget*>(m_layerList->itemWidget(item));
+        if (widget && widget->isSelected()) {
+            selectedIds.append(widget->layerId());
+        }
+    }
+
+    if (selectedIds.size() < 2) {
+        appendLog("WARN", "Birlestirilecek en az 2 katman secin.");
+        return;
+    }
+
+    // Z-offset uygulayarak birlestir
+    QVector<QVector3D> merged;
+    for (int id : selectedIds) {
+        if (!m_layers.contains(id))
+            continue;
+
+        const ScanLayerData& layer = m_layers[id];
+        float zOff = layer.zOffsetMm;
+
+        for (const auto& p : layer.points) {
+            merged.push_back(QVector3D(p.x(), p.y(), p.z() + zOff));
+        }
+
+        appendLog("SYS", QString("  '%1': %2 nokta, Z-offset: %3 mm")
+                             .arg(layer.name)
+                             .arg(layer.points.size())
+                             .arg(zOff, 0, 'f', 1));
+    }
+
+    appendLog("OK", QString("%1 katman birlestirildi -> %2 toplam nokta")
+                        .arg(selectedIds.size())
+                        .arg(merged.size()));
+
+    emit mergedCloudReady(merged);
+}
+
+// ===================================================================
+// Scan kontrol
+// ===================================================================
 
 void ScanPanel::onStartClicked()
 {
@@ -242,23 +482,6 @@ void ScanPanel::updateStartButtonState()
 {
     bool canScan = m_mcuReady || m_laserReady;
     m_startBtn->setEnabled(canScan && !m_ctrl->isScanning());
-}
-
-void ScanPanel::onMergeClicked()
-{
-    auto items = m_layerList->selectedItems();
-    if (items.isEmpty())
-    {
-        appendLog("WARN", "Birlestirilecek katman secilmedi.");
-        return;
-    }
-    QString mode = m_mergeMode->currentText();
-    appendLog("OK", QString("%1 katman birlestiriliyor. Mod: %2").arg(items.size()).arg(mode));
-}
-
-void ScanPanel::onAddLayerDemo()
-{
-    // Artik kullanilmiyor (STL Sec oldu)
 }
 
 void ScanPanel::appendLog(const QString& level, const QString& msg)

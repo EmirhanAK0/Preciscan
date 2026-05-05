@@ -6,6 +6,7 @@
 #include <QString>
 #include <QVector>
 #include <QVector3D>
+#include <queue>
 #include <atomic>
 
 #include "../../io/serial_trigger_reader.h"
@@ -41,6 +42,7 @@ public:
     bool isScanning() const { return m_scanning; }
 
     float dOffset() const { return m_dOffset; }
+    float lateralOffset() const { return m_lOffset; }
     float resolution() const { return m_resolution; }
     float rps() const { return m_rps; }
 
@@ -60,6 +62,7 @@ public slots:
     void disconnectLaser();
 
     void setDOffset(float mm);
+    void setLateralOffset(float mm);
     void setResolution(float deg);
     void setRps(float rps);
 
@@ -81,6 +84,15 @@ public slots:
     void startScan();
     void stopScan();
     void saveCurrentScan(const QString& path);
+
+    /// Arduino'ya seri komut gonder
+    bool sendSerialCommand(const QString& cmd);
+    /// Z eksenini mm kadar hareket ettir
+    void sendZMove(float mm);
+    /// Z eksenini home'a getir
+    void sendZHome();
+    /// Lineer homing baslat
+    void sendLinHome();
 
 signals:
     void mcuConnectionChanged(bool connected);
@@ -114,6 +126,7 @@ private:
     sim::LaserSimWorker* m_simWorker{nullptr};
 
     float m_dOffset{66.0f};
+    float m_lOffset{0.0f};
     float m_resolution{1.0f};
     float m_rps{10.0f};
 
@@ -127,6 +140,7 @@ private:
 
     QTimer* m_hwTimer{nullptr};
     float m_hwAngle{0.0f};
+    std::queue<float> m_encoderAngles;
 
     ScanTriggerMode m_triggerMode{ScanTriggerMode::TimeBased};
 

@@ -27,7 +27,7 @@ void VisualizerWidget::addPoints(const QVector<QVector3D>& points)
     update();
 }
 
-void VisualizerWidget::addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ, float xOffset)
+void VisualizerWidget::addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ, float zOffset, float lateralOffset)
 {
     float theta_rad = theta_deg * (M_PI / 180.0f);
     float cosA      = std::cos(theta_rad);
@@ -35,18 +35,20 @@ void VisualizerWidget::addProfile(float theta_deg, const QVector<QPointF>& profi
 
     for (const auto& p : profile)
     {
-        // 2D raw profil degerleri:
-        // Lazer YANA (sideways) monte edilmis ve cizgi DIKEY (vertical).
-        // Bu yuzden:
-        // p.x() = Lazer cizgisi uzerindeki konum -> Gercek dunya Yuksekligi (Z)
-        // p.y() = Lazerin objeye mesafesi       -> Gercek dunya Yaricapi (R)
+        // p.x() = Yukseklik (Z)
+        // p.y() = Lazerin objeye uzakligi (raw_r)
 
-        float z = p.x() - xOffset; // Lazerin asagi/yukari kayikligi
-        float r = tableZ - p.y();  // tableZ: Lazer ile donus merkezi arasindaki yatay mesafe
+        float z = p.x() - zOffset; 
+        float r = tableZ - p.y();  
 
-        if (r < 0.0f) continue; // Merkezden daha uzaktaki (arkaplan) gurultuleri yoksay
+        // Eger yaricap cok kucukse gurultudur
+        if (std::abs(r) < 0.05f) continue; 
 
-        m_points.push_back(QVector3D(r * cosA, r * sinA, z));
+        // R gercek cap, ancak lazer merkeze gore lateral(X) olarak kayik olabilir (lateralOffset)
+        float X = r * cosA - lateralOffset * sinA;
+        float Y = r * sinA + lateralOffset * cosA;
+
+        m_points.push_back(QVector3D(X, Y, z));
     }
     update();
 }
