@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <cstring>
 #include <vector>
+#include <algorithm>
 
 #include "../../core/packet.h"
 #include "../../hardware/laser_manager.h"
@@ -139,17 +140,10 @@ void ScanController::connectLaser()
     m_laser->setMeasuringField(m_laserMeasuringField.toStdString());
     m_laser->setPointsPerProfile(static_cast<unsigned int>(m_laserPointsPerProfile));
 
-    // Tarama mod'una gore lazer donanim trigger'ini ayarla:
-    // Encoder veya ExternalTrigger modunda lazer Arduino'dan gelen
-    // elektriksel sinyali beklemeli (ExternalDigitalIn).
-    // TimeBased modunda lazer kendi ic zamanlayicisiyla tetiklenir (Internal).
-    if (m_triggerMode == ScanTriggerMode::TimeBased) {
-        m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
-        emit logMessage("SYS", "Lazer tetik: Internal (Time-Based)");
-    } else {
-        m_laser->setTriggerMode(LaserManager::TriggerMode::ExternalDigitalIn);
-        emit logMessage("SYS", "Lazer tetik: ExternalDigitalIn (Arduino sinyali bekleniyor)");
-    }
+    // Lazer her zaman Internal modda calisir (kendi zamanlayicisiyla profil uretir).
+    // Encoder eslestirme yazilimda yapilir — fiziksel tetik bagiantisina bagli degiliz.
+    m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
+    emit logMessage("SYS", "Lazer tetik: Internal (surekli profil akisi)");
 
     if (!m_laser->connect()) {
         emit logMessage("ERR",
@@ -158,6 +152,8 @@ void ScanController::connectLaser()
         return;
     }
 
+    // Acquisition'ı başlat — External Trigger modunda lazer sadece
+    // Arduino'dan fiziksel tetik geldiğinde profil üretecek.
     m_laser->startAcquisition();
 
     m_isSimMode = false;
@@ -228,21 +224,8 @@ void ScanController::connectLaserSim(const QString& stlPath)
             &sim::LaserSimWorker::profileReady,
             this,
             [this](float theta, const QVector<QPointF>& sensorData) {
-                QVector<QPointF> reconstructed;
-                reconstructed.reserve(sensorData.size());
-
-                for (const auto& p : sensorData) {
-                    const float heightZ = p.x();
-                    const float distD = p.y();
-                    const float radiusR = m_dOffset - distD;
-
-                    if (radiusR > 0.05f) {
-                        reconstructed.push_back(QPointF(radiusR, heightZ));
-                    }
-                }
-
-                if (!reconstructed.isEmpty()) {
-                    emit simProfileReceived(theta, reconstructed);
+                if (!sensorData.isEmpty()) {
+                    publishProfileFrame(theta, sensorData);
                 }
             });
 
@@ -270,28 +253,30 @@ void ScanController::disconnectLaser()
     emit logMessage("SYS", "Lazer baglantisi kesildi.");
 }
 
+// =====================================================================
+// startScan — Doğru sıralama ile temiz başlangıç
+// =====================================================================
 void ScanController::startScan()
 {
     if (m_scanning)
         return;
 
-    // Scan başlamadan önce birikmiş eski trigger event'lerini temizle.
+    // ── 1. Tüm eski verileri temizle ────────────────────────────
     while (!m_encoderAngles.empty()) m_encoderAngles.pop();
 
-    {
-        // Ring buffer (lazer profil paketleri)
-        if (m_ring)
-            m_ring->clear();
+    if (m_ring)
+        m_ring->clear();
 
+    if (m_serialReader) {
         SerialTriggerReader::TriggerEvent sEvt;
-        while (m_serialReader && m_serialReader->tryGetTriggerEvent(sEvt)) {}
-
+        while (m_serialReader->tryGetTriggerEvent(sEvt)) {}
+    }
+    if (m_mcu) {
         McuListener::TriggerEvent uEvt;
-        while (m_mcu && m_mcu->tryGetTriggerEvent(uEvt)) {}
-
-        emit logMessage("SYS", "Tetik kuyruklari ve ring buffer temizlendi — gercek zamanli isleme basladi.");
+        while (m_mcu->tryGetTriggerEvent(uEvt)) {}
     }
 
+    emit logMessage("SYS", "Tetik kuyruklari ve ring buffer temizlendi.");
     emit requestClearVisualizer();
 
     m_scanning = true;
@@ -300,15 +285,24 @@ void ScanController::startScan()
 
     if (m_isSimMode && m_simWorker) {
         m_simWorker->start();
-    } else if (m_ring) {
-        // QTimer her modda baslatiilir (interval=0, yani event-loop bos oldugca calisir).
-        // consumeHardwarePackets() icinde mod'a gore TimeBased veya Encoder/External
-        // isleme dallarina ayrilir.
-        m_hwTimer->start();
+    } else if (m_ring && m_laser) {
 
-        // Arduino'ya tarama baslat komutu gonder (rotary motoru calistir)
-        if (m_serialReader)
+        // ── 2. Ring buffer temizle (birikmiş eski profilleri at) ──
+        m_ring->clear();
+
+        // ── 3. Kısa bekleme + son temizlik ──────────────────────
+        // Lazer Internal modda sürekli çalışıyor. Temizleme anında
+        // gelen son birkaç profili de atalım.
+        QThread::msleep(100);
+        m_ring->clear();
+
+        // ── 7. Arduino'ya START gönder (motor dönsün) ───────────
+        if (m_serialReader) {
             m_serialReader->sendCommand("START");
+            emit logMessage("SYS", "Arduino'ya START komutu gonderildi.");
+        }
+
+        m_hwTimer->start();
 
         if (m_triggerMode == ScanTriggerMode::TimeBased)
             emit logMessage("SYS", "Tarama basladi: Time-Based mod");
@@ -321,6 +315,9 @@ void ScanController::startScan()
     emit scanStarted();
 }
 
+// =====================================================================
+// stopScan — Temiz kapanış
+// =====================================================================
 void ScanController::stopScan()
 {
     if (!m_scanning)
@@ -328,7 +325,7 @@ void ScanController::stopScan()
 
     m_scanning = false;
 
-    // Arduino'ya tarama durdur komutu gonder
+    // Arduino'ya durdur komutu
     if (m_serialReader)
         m_serialReader->sendCommand("STOP");
 
@@ -337,23 +334,16 @@ void ScanController::stopScan()
 
     m_hwTimer->stop();
 
-    // ── Tüm boru hatlarını temizle ──────────────────────────────
-    // Scan durduğunda lazer hâlâ acquisition modundaysa ring buffer
-    // dolmaya devam eder.  Ayrıca MCU/serial kuyruklarında birikmiş
-    // tetik olayları kalabilir.  Bunları şimdi boşaltmazsak bir sonraki
-    // startScan()'da eski profiller aniden görselleştirilir.
+    // Lazer Internal modda surekli calisiyor, acquisition durdurmuyoruz.
+    // Sadece tamponlari bosalt.
 
-    // 1. Ring buffer (lazer profil paketleri)
+    // Tamponları boşalt
     if (m_ring)
         m_ring->clear();
-
-    // 2. Serial tetik kuyruğu
     if (m_serialReader) {
         SerialTriggerReader::TriggerEvent sEvt;
         while (m_serialReader->tryGetTriggerEvent(sEvt)) {}
     }
-
-    // 3. UDP tetik kuyruğu
     if (m_mcu) {
         McuListener::TriggerEvent uEvt;
         while (m_mcu->tryGetTriggerEvent(uEvt)) {}
@@ -361,81 +351,111 @@ void ScanController::stopScan()
 
     m_hwAngle = 0.0f;
 
-    emit logMessage("SYS", "Tarama durduruldu — tamponlar temizlendi.");
+    emit logMessage("SYS", "Tarama durduruldu — lazer ve tamponlar temizlendi.");
     emit scanStopped();
 }
 
+// =====================================================================
+// consumeHardwarePackets — Ana veri işleme döngüsü
+// =====================================================================
 void ScanController::consumeHardwarePackets()
 {
-    // Bu slot yalnizca TimeBased modda QTimer tarafindan cagirilir.
     if (!m_ring || !m_scanning || !m_laser)
         return;
 
-    // ----- Enkoder / External Trigger modu: MCU tetik olaylarini isle -----
+    // ═══════════════════════════════════════════════════════════════
+    // Enkoder / External Trigger modu
+    // ═══════════════════════════════════════════════════════════════
     if (m_triggerMode != ScanTriggerMode::TimeBased) {
         static constexpr int MAX_EVENTS = 16;
         int evtCount = 0;
         
-        // 1. UDP uzerinden MCU (eski yontem, varsa)
+        // 1. UDP üzerinden MCU (eski yöntem, varsa)
         if (m_mcu) {
             McuListener::TriggerEvent evt;
             while (evtCount < MAX_EVENTS && m_mcu->tryGetTriggerEvent(evt)) {
                 ++evtCount;
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
+                emit logMessage("MCU", QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg")
+                    .arg(evt.seq).arg(angleDeg, 0, 'f', 2));
                 m_encoderAngles.push(angleDeg);
             }
         }
         
-        // 2. Serial port uzerinden MCU (Arduino)
+        // 2. Serial port üzerinden MCU (Arduino)
         if (m_serialReader) {
             SerialTriggerReader::TriggerEvent evt;
             while (evtCount < MAX_EVENTS && m_serialReader->tryGetTriggerEvent(evt)) {
                 ++evtCount;
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
+                emit logMessage("MCU", QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg")
+                    .arg(evt.seq).arg(angleDeg, 0, 'f', 2));
                 m_encoderAngles.push(angleDeg);
             }
         }
-        
-        // Eslestirme: Her aci icin bir profil bekle
-        while (!m_encoderAngles.empty()) {
-            Packet pkt;
-            if (m_ring->try_pop(pkt)) {
+        // Akilli eslestirme: Buffer'daki profilleri topla, son N tanesini
+        // N bekleyen aciya dagit. Eski profilleri atla.
+        //
+        // Ornek: 50 profil, 3 aci → profil #48→aci1, #49→aci2, #50→aci3
+        // Bu sayede her aci zamansal olarak en yakin profili alir.
+        {
+            const int numAngles = static_cast<int>(m_encoderAngles.size());
+            if (numAngles == 0) { return; }
+
+            // 1. Ring buffer'i tamamen bosalt, tum profilleri topla
+            std::vector<Packet> allProfiles;
+            allProfiles.reserve(128);
+            {
+                Packet tmp;
+                while (m_ring->try_pop(tmp)) {
+                    allProfiles.push_back(std::move(tmp));
+                }
+            }
+
+            const int profileCount = static_cast<int>(allProfiles.size());
+            if (profileCount == 0) { return; }
+
+            // 2. Kac profili kullanacagimizi hesapla
+            const int usable = (numAngles < profileCount) ? numAngles : profileCount;
+            const int skip   = profileCount - usable;
+
+            // 3. Son 'usable' profili, ilk 'usable' aciya esle
+            static std::vector<double> vX, vZ;
+            for (int i = 0; i < usable; ++i) {
+                Packet& pkt = allProfiles[skip + i];
                 float angleDeg = m_encoderAngles.front();
                 m_encoderAngles.pop();
 
                 if (!pkt.data.empty()) {
-                    static std::vector<double> vX, vZ;
                     if (m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ)) {
                         const unsigned int res = m_laser->resolution();
                         QVector<QPointF> profile;
                         profile.reserve(static_cast<int>(res));
-                        for (unsigned int i = 0; i < res; ++i) {
-                            if (vX[i] == 0.0 && vZ[i] == 0.0) continue;
-                            profile.push_back(QPointF(vX[i], vZ[i]));
+                        for (unsigned int j = 0; j < res; ++j) {
+                            if (vX[j] == 0.0 && vZ[j] == 0.0) continue;
+                            profile.push_back(QPointF(vX[j], vZ[j]));
                         }
                         if (!profile.isEmpty()) {
-                            emit simProfileReceived(angleDeg, profile);
+                            publishProfileFrame(angleDeg, profile);
                         }
                     }
                 }
-                
-                // 360 derece kontrolu (encoder modunda da taramayi otomatik bitir)
+
+                // 360 derece kontrolu
                 if (angleDeg >= 359.5f || angleDeg <= -359.5f) {
                     stopScan();
                     return;
                 }
-            } else {
-                // Lazer profili henuz gelmedi, siradaki timer tick'te tekrar dene
-                break;
             }
         }
-        return; // Encoder profil tüketimini tamamladi
+        return;
     }
 
-    // ----- Time-Based modu: sabit açi adimi ile ring buffer'dan profil al -----
-    // Oncelik: MCU bagliysa gercek donus acisini kullan (spiral olusumunu engeller)
+    // ═══════════════════════════════════════════════════════════════
+    // Time-Based modu
+    // ═══════════════════════════════════════════════════════════════
     if (m_serialReader) {
         SerialTriggerReader::TriggerEvent evt;
         while (m_serialReader->tryGetTriggerEvent(evt)) {
@@ -443,7 +463,6 @@ void ScanController::consumeHardwarePackets()
         }
     }
 
-    // 360 derece tamamlandiysa taramayi otomatik bitir
     if (m_hwAngle >= 359.5f) {
         stopScan();
         return;
@@ -480,9 +499,8 @@ void ScanController::consumeHardwarePackets()
         }
 
         if (!profile.isEmpty()) {
-            emit simProfileReceived(m_hwAngle, profile);
+            publishProfileFrame(m_hwAngle, profile);
             
-            // Sadece donanim (MCU) bagli degilse simulatif olarak artir
             if (!m_serialReader) {
                 m_hwAngle += m_resolution;
                 if (m_hwAngle >= 360.0f) {
@@ -496,8 +514,22 @@ void ScanController::consumeHardwarePackets()
 
 void ScanController::onEncoderTrigger(float angleDeg)
 {
-    // Eski kullanim: Artik queue (m_encoderAngles) uzerinden eslestirme yapiliyor.
-    // Geriye donuk uyumluluk (ya da baska bir cagrida patlamamasi) icin bos birakildi.
+    // Artik queue üzerinden eslestirme yapiliyor.
+}
+
+void ScanController::publishProfileFrame(float thetaDeg, const QVector<QPointF>& profile)
+{
+    if (profile.isEmpty())
+        return;
+
+    ScanProfileFrame frame;
+    frame.profile = profile;
+    frame.thetaDegree = thetaDeg;
+    frame.layerIndex = 0;
+    frame.direction = ScanDirection::Clockwise;
+
+    emit profileFrameReceived(frame);
+    emit simProfileReceived(thetaDeg, profile);
 }
 
 void ScanController::saveCurrentScan(const QString& path)

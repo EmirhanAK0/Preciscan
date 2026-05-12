@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <string>
 #include <vector>
@@ -24,6 +24,8 @@ public:
     void startAcquisition();
     void stopAcquisition();
     void disconnect();
+
+    bool applyAcquisitionSettings();
 
     bool convertProfile(const unsigned char* data,
                         size_t size,
@@ -88,7 +90,6 @@ public:
     }
 
 private:
-    bool applyAcquisitionSettings();
     bool validateTiming(std::string* err = nullptr) const;
     unsigned int chooseResolutionFromPoints(unsigned int points) const;
     DWORD buildExposureValue() const;

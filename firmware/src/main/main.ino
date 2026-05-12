@@ -29,8 +29,8 @@
 const uint8_t DIR_FORWARD = LOW;
 const uint8_t DIR_REVERSE = HIGH;
 
-const unsigned long LIN_STEP_US     = 800UL;     
-const unsigned long ROT_STEP_US     = 40000UL;   
+const unsigned long LIN_STEP_US     = 200UL;     
+const unsigned long ROT_STEP_US     = 50000UL;    // 50ms/adim — yavas ve stabil
 const unsigned long Z_STEP_US       = 800UL;     
 const unsigned long Z_HOME_STEP_US  = 1200UL;    
 
@@ -42,7 +42,7 @@ const float ROT_STEPS_PER_REV  = 3200.0f;
 const float Z_STEPS_PER_REV    = 3200.0f;
 
 const float ROT_DEG_PER_STEP       = 360.0f / ROT_STEPS_PER_REV;
-const float ROT_STEPS_PER_HALF_DEG = ROT_STEPS_PER_REV / 720.0f;
+const float ROT_STEPS_PER_2DEG     = ROT_STEPS_PER_REV / 180.0f; // 2 derece cozunurluk
 
 const float LIN_LEAD_MM     = 2.0f; 
 const float LIN_MM_PER_STEP = LIN_LEAD_MM / LIN_STEPS_PER_REV;
@@ -212,8 +212,8 @@ void motorlariSur() {
         if (rotYon) rotTotalSteps++; else rotTotalSteps--;
         
         rotStepAccum += 1.0f;
-        if (rotStepAccum >= ROT_STEPS_PER_HALF_DEG) {
-            rotStepAccum -= ROT_STEPS_PER_HALF_DEG;
+        if (rotStepAccum >= ROT_STEPS_PER_2DEG) {
+            rotStepAccum -= ROT_STEPS_PER_2DEG;
             
             // --- LAZER TETIKLEME NOKTASI ---
             digitalWrite(LASER_PIN, HIGH);

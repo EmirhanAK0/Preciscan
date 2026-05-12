@@ -10,6 +10,7 @@
 #include <atomic>
 
 #include "../../io/serial_trigger_reader.h"
+#include "ScanProfileFrame.hpp"
 
 /// Tarama tetik kaynağı
 enum class ScanTriggerMode {
@@ -72,26 +73,20 @@ public slots:
     void setLaserMeasuringField(const QString& field);
     void setLaserPointsPerProfile(int points);
     void setTriggerMode(ScanTriggerMode mode);
-    void setSerialPort(const QString& portName); ///< Enkoder mod icin COM port (orn. "COM3")
+    void setSerialPort(const QString& portName);
 
-    /// Enkoder modunda: MCU tarafından her tetik geldiğinde çağrılır.
-    /// angleDeg = enkoderin ölçtüğü gerçek açı (derece).
     void onEncoderTrigger(float angleDeg);
 
-    void connectMcuSerial(); ///< Serial port üzerinden MCU bağlantısı kur
-    void disconnectMcuSerial(); ///< Serial bağlantıyı kes
+    void connectMcuSerial();
+    void disconnectMcuSerial();
 
     void startScan();
     void stopScan();
     void saveCurrentScan(const QString& path);
 
-    /// Arduino'ya seri komut gonder
     bool sendSerialCommand(const QString& cmd);
-    /// Z eksenini mm kadar hareket ettir
     void sendZMove(float mm);
-    /// Z eksenini home'a getir
     void sendZHome();
-    /// Lineer homing baslat
     void sendLinHome();
 
 signals:
@@ -104,6 +99,7 @@ signals:
     void requestClearVisualizer();
     void mcuPacketReceived(quint32 seq, float y_mm);
     void simProfileReceived(float theta_deg, const QVector<QPointF>& profile);
+    void profileFrameReceived(const ScanProfileFrame& frame);
     void pointCloudReady(const QVector<QVector3D>& cloud);
     void meshLoaded(const QVector<QVector3D>& triangles);
     void logMessage(const QString& level, const QString& msg);
@@ -115,6 +111,7 @@ private slots:
 private:
     void rebuildSimWorkerIfPossible();
     bool validateLaserTiming(QString* errorMsg = nullptr) const;
+    void publishProfileFrame(float thetaDeg, const QVector<QPointF>& profile);
 
 private:
     McuListener* m_mcu = nullptr;
@@ -142,7 +139,7 @@ private:
     float m_hwAngle{0.0f};
     std::queue<float> m_encoderAngles;
 
-    ScanTriggerMode m_triggerMode{ScanTriggerMode::TimeBased};
+    ScanTriggerMode m_triggerMode{ScanTriggerMode::Encoder};
 
     QString m_serialPort{"COM3"};
     SerialTriggerReader* m_serialReader{nullptr};

@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
     app.setApplicationVersion("2.1");
 
     // --- Backend nesneleri (UI ile paylasilan) ---
-    SPSCRingBuffer ring(256);
+    SPSCRingBuffer ring(4096);
     RingBufferSink sink(ring);
     McuListener mcu(8080); // Varsayilan port, CLI'dan ayri
     LaserManager laser("LLT.dll", &sink);
