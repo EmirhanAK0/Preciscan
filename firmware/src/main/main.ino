@@ -50,7 +50,7 @@ const float Z_LEAD_MM     = 2.0f;
 const float Z_MM_PER_STEP = Z_LEAD_MM / Z_STEPS_PER_REV;
 
 const float LIN_LIMIT1_MASA_UZAKLIGI = 119.525f; 
-const float LIN_HEDEF_MESAFE         = 66.0f;    
+const float LIN_HEDEF_MESAFE         = 78.0f;    
 const float LIN_GIDILECEK            = LIN_LIMIT1_MASA_UZAKLIGI - LIN_HEDEF_MESAFE;
 
 bool LIN_LIMIT1_YONU  = false;  

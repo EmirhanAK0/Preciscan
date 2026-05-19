@@ -38,3 +38,5 @@ runs/
 *.bin
 metrics_*.json
 udp_raw.bin
+
+programlar/
