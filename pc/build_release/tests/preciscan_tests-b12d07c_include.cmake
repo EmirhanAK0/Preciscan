@@ -1,0 +1,5 @@
+if(EXISTS "C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/build_release/tests/preciscan_tests-b12d07c_tests.cmake")
+  include("C:/Users/Emirhan/OneDrive - Yildiz Technical University/Masaüstü/m2lab proje/Preciscan/pc/build_release/tests/preciscan_tests-b12d07c_tests.cmake")
+else()
+  add_test(preciscan_tests_NOT_BUILT-b12d07c preciscan_tests_NOT_BUILT-b12d07c)
+endif()

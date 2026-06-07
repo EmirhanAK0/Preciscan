@@ -97,6 +97,17 @@ bool SerialTriggerReader::tryGetTriggerEvent(TriggerEvent& evt)
     return true;
 }
 
+bool SerialTriggerReader::tryGetMessage(std::string& msg)
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    if (m_msgQueue.empty())
+        return false;
+
+    msg = m_msgQueue.front();
+    m_msgQueue.pop();
+    return true;
+}
+
 size_t SerialTriggerReader::queueSize() const
 {
     std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -201,13 +212,20 @@ bool SerialTriggerReader::parseLine(const std::string& line, TriggerEvent& evt)
         }
     }
 
+    // STATUS:, STATE: gibi text mesajlar float parse'a girmeden erken cikar
+    // Bunlar m_msgQueue'ya gidecek (readLoop'ta parseLine false donunce)
+    if (line.rfind("STATUS", 0) == 0 || line.rfind("STATE", 0) == 0 ||
+        line.rfind("PRECISCAN", 0) == 0 || line.rfind("WAITING", 0) == 0)
+    {
+        return false;
+    }
+
     // Aksi halde kullanicinin Arduino kodundaki gibi sadece float (ornegin 45.23) bekliyoruz
     try
     {
-        // Gelen yalnizca float bir string ise parse et (ornek: "45.23")
         float angleDeg = std::stof(line);
         evt.session_id    = 1;
-        evt.seq           = 0; // seq su an kullanilmiyor ama arduino eklemiyor
+        evt.seq           = 0;
         evt.encoder_count = 0;
         evt.angle_mdeg    = static_cast<int32_t>(angleDeg * 1000.0f);
         evt.tick_us       = 0;
@@ -257,6 +275,12 @@ void SerialTriggerReader::readLoop()
                 {
                     std::lock_guard<std::mutex> lock(m_queueMutex);
                     m_queue.push(evt);
+                }
+                else
+                {
+                    // Trigger degil — STATUS:, boot mesaji vb. → log kuyruğuna gonder
+                    std::lock_guard<std::mutex> lock(m_queueMutex);
+                    m_msgQueue.push(lineBuffer);
                 }
                 lineBuffer.clear();
             }

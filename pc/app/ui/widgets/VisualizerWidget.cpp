@@ -2,11 +2,44 @@
 
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPainter>
+#include <QMatrix4x4>
 #include <cmath>
 
 VisualizerWidget::VisualizerWidget(QWidget* parent) : QOpenGLWidget(parent)
 {
     setStyleSheet("background: #050505; border: 1px solid #1a1a1a;");
+
+    // Add Preset View Buttons
+    m_btnTop = new QPushButton("Üst", this);
+    m_btnFront = new QPushButton("Ön", this);
+    m_btnLeft = new QPushButton("Yan", this);
+
+    QString btnStyle = "QPushButton { background: rgba(30, 30, 30, 180); color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 4px 8px; } QPushButton:hover { background: rgba(60, 60, 60, 200); color: white; }";
+    m_btnTop->setStyleSheet(btnStyle);
+    m_btnFront->setStyleSheet(btnStyle);
+    m_btnLeft->setStyleSheet(btnStyle);
+
+    m_btnTop->setCursor(Qt::PointingHandCursor);
+    m_btnFront->setCursor(Qt::PointingHandCursor);
+    m_btnLeft->setCursor(Qt::PointingHandCursor);
+
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    btnLayout->addWidget(m_btnTop);
+    btnLayout->addWidget(m_btnFront);
+    btnLayout->addWidget(m_btnLeft);
+
+    auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->addLayout(btnLayout);
+    mainLayout->addStretch();
+
+    connect(m_btnTop, &QPushButton::clicked, this, &VisualizerWidget::setTopView);
+    connect(m_btnFront, &QPushButton::clicked, this, &VisualizerWidget::setFrontView);
+    connect(m_btnLeft, &QPushButton::clicked, this, &VisualizerWidget::setLeftView);
 }
 
 void VisualizerWidget::clearPoints()
@@ -18,6 +51,36 @@ void VisualizerWidget::clearPoints()
 void VisualizerWidget::setMesh(const QVector<QVector3D>& triangles)
 {
     m_meshTriangles = triangles;
+    update();
+}
+
+void VisualizerWidget::setTopView()
+{
+    m_xRot = 0.0f;
+    m_yRot = 0.0f;
+    m_xPan = 0.0f;
+    m_yPan = 0.0f;
+    m_isOrtho = true;
+    update();
+}
+
+void VisualizerWidget::setFrontView()
+{
+    m_xRot = -90.0f;
+    m_yRot = 0.0f;
+    m_xPan = 0.0f;
+    m_yPan = 0.0f;
+    m_isOrtho = true;
+    update();
+}
+
+void VisualizerWidget::setLeftView()
+{
+    m_xRot = -90.0f;
+    m_yRot = 90.0f;
+    m_xPan = 0.0f;
+    m_yPan = 0.0f;
+    m_isOrtho = true;
     update();
 }
 
@@ -65,19 +128,27 @@ void VisualizerWidget::initializeGL()
 void VisualizerWidget::resizeGL(int w, int h)
 {
     glViewport(0, 0, w, h);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    float aspect = (float)w / (h ? (float)h : 1.0f);
-    glFrustum(-aspect * 0.1f, aspect * 0.1f, -0.1f, 0.1f, 0.1f, 5000.0f);
-    glMatrixMode(GL_MODELVIEW);
+    // Projection will be dynamically handled in paintGL
 }
 
 void VisualizerWidget::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Apply Dynamic Projection (Ortho vs Perspective)
+    glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glTranslatef(0, 0, m_zoom);
+    float aspect = (float)width() / (height() ? (float)height() : 1.0f);
+    if (m_isOrtho) {
+        float orthoScale = std::abs(m_zoom) * 0.1f; 
+        glOrtho(-aspect * orthoScale, aspect * orthoScale, -orthoScale, orthoScale, 0.1f, 5000.0f);
+    } else {
+        glFrustum(-aspect * 0.1f, aspect * 0.1f, -0.1f, 0.1f, 0.1f, 5000.0f);
+    }
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(m_xPan, m_yPan, m_zoom);
     glRotatef(m_xRot, 1, 0, 0);
     glRotatef(m_yRot, 0, 0, 1);
 
@@ -85,7 +156,99 @@ void VisualizerWidget::paintGL()
     drawAxes();
     drawMesh();
     drawPoints();
+    
+    // Draw 2D measurement overlay
+    if (m_isMeasuring) {
+        QPainter painter(this);
+        calculateAndDrawDimensions();
+    }
 }
+
+void VisualizerWidget::drawMeasurementBox()
+{
+    // Not used directly in OpenGL, QPainter is used in calculateAndDrawDimensions
+}
+
+void VisualizerWidget::calculateAndDrawDimensions()
+{
+    QPainter painter(this);
+    painter.setPen(QPen(Qt::green, 2, Qt::DashLine));
+    painter.setBrush(QBrush(QColor(0, 255, 0, 30)));
+
+    QRect rect(m_measureStart, m_measureEnd);
+    painter.drawRect(rect);
+
+    // To measure physical distance, unproject the screen points
+    QMatrix4x4 modelView;
+    modelView.translate(m_xPan, m_yPan, m_zoom);
+    modelView.rotate(m_xRot, 1, 0, 0);
+    modelView.rotate(m_yRot, 0, 0, 1);
+
+    QMatrix4x4 projection;
+    float aspect = (float)width() / (height() ? (float)height() : 1.0f);
+    if (m_isOrtho) {
+        float orthoScale = std::abs(m_zoom) * 0.1f; 
+        projection.ortho(-aspect * orthoScale, aspect * orthoScale, -orthoScale, orthoScale, 0.1f, 5000.0f);
+    } else {
+        projection.frustum(-aspect * 0.1f, aspect * 0.1f, -0.1f, 0.1f, 0.1f, 5000.0f);
+    }
+
+    QRect viewport(0, 0, width(), height());
+
+    // Function to unproject a point onto Z=0 plane (if looking down Z), or plane facing camera
+    // Near and Far points:
+    QVector3D p1Near = QVector3D(m_measureStart.x(), height() - m_measureStart.y(), 0.0f).unproject(modelView, projection, viewport);
+    QVector3D p1Far  = QVector3D(m_measureStart.x(), height() - m_measureStart.y(), 1.0f).unproject(modelView, projection, viewport);
+    
+    QVector3D p2Near = QVector3D(m_measureEnd.x(), height() - m_measureEnd.y(), 0.0f).unproject(modelView, projection, viewport);
+    QVector3D p2Far  = QVector3D(m_measureEnd.x(), height() - m_measureEnd.y(), 1.0f).unproject(modelView, projection, viewport);
+
+    // Compute Ray vectors
+    QVector3D dir1 = (p1Far - p1Near).normalized();
+    QVector3D dir2 = (p2Far - p2Near).normalized();
+
+    // Plane intersection. We choose the plane based on rotation.
+    QVector3D planeNormal(0, 0, 1);
+    if (std::abs(m_xRot + 90.0f) < 1.0f) {
+        if (std::abs(m_yRot) < 1.0f) planeNormal = QVector3D(0, 1, 0); // Front view
+        else if (std::abs(m_yRot - 90.0f) < 1.0f) planeNormal = QVector3D(1, 0, 0); // Left view
+    }
+
+    // Intersect Ray 1
+    float t1 = -QVector3D::dotProduct(p1Near, planeNormal) / QVector3D::dotProduct(dir1, planeNormal);
+    QVector3D w1 = p1Near + dir1 * t1;
+
+    // Intersect Ray 2
+    float t2 = -QVector3D::dotProduct(p2Near, planeNormal) / QVector3D::dotProduct(dir2, planeNormal);
+    QVector3D w2 = p2Near + dir2 * t2;
+
+    float distW = 0.0f;
+    float distH = 0.0f;
+
+    // Based on plane, calculate the primary axes distances
+    if (planeNormal.z() > 0.5f) { // Top view
+        distW = std::abs(w2.x() - w1.x());
+        distH = std::abs(w2.y() - w1.y());
+    } else if (planeNormal.y() > 0.5f) { // Front view
+        distW = std::abs(w2.x() - w1.x());
+        distH = std::abs(w2.z() - w1.z());
+    } else { // Left view
+        distW = std::abs(w2.y() - w1.y());
+        distH = std::abs(w2.z() - w1.z());
+    }
+
+    painter.setPen(Qt::white);
+    painter.setFont(QFont("Arial", 11, QFont::Bold));
+    QString text = QString("W: %1 mm, H: %2 mm").arg(distW, 0, 'f', 1).arg(distH, 0, 'f', 1);
+    
+    // Draw text near the rect, with a black outline or background for readability
+    QRect textRect(rect.bottomRight() + QPoint(10, 10), QSize(150, 30));
+    painter.fillRect(textRect, QColor(0, 0, 0, 180));
+    painter.drawText(textRect, Qt::AlignCenter, text);
+}
+
+// ... existing draw functions ...
+
 
 void VisualizerWidget::drawGrid()
 {
@@ -178,23 +341,53 @@ void VisualizerWidget::drawPoints()
 void VisualizerWidget::mousePressEvent(QMouseEvent* event)
 {
     m_lastPos = event->pos();
+    if (event->button() == Qt::RightButton) {
+        m_isMeasuring = true;
+        m_measureStart = event->pos();
+        m_measureEnd = event->pos();
+        update();
+    }
 }
 
 void VisualizerWidget::mouseMoveEvent(QMouseEvent* event)
 {
-    int dx = event->x() - m_lastPos.x();
-    int dy = event->y() - m_lastPos.y();
-    if (event->buttons() & Qt::LeftButton)
+    int dx = event->position().x() - m_lastPos.x();
+    int dy = event->position().y() - m_lastPos.y();
+    
+    if (m_isMeasuring && (event->buttons() & Qt::RightButton)) {
+        m_measureEnd = event->pos();
+        update();
+    }
+    else if (event->buttons() & Qt::LeftButton)
     {
         m_xRot += dy * 0.5f;
         m_yRot += dx * 0.5f;
+        m_isOrtho = false; // Switch to perspective when rotating
+        update();
+    }
+    else if (event->buttons() & Qt::MiddleButton)
+    {
+        float panFactor = std::max(0.1f, std::abs(m_zoom) / 500.0f);
+        m_xPan += dx * panFactor;
+        m_yPan -= dy * panFactor;
         update();
     }
     m_lastPos = event->pos();
 }
 
+void VisualizerWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::RightButton) {
+        // Keep measuring box visible until next click, or hide it? 
+        // We'll leave it visible so they can read the text.
+        // It gets cleared on next right click.
+    }
+}
+
 void VisualizerWidget::wheelEvent(QWheelEvent* event)
 {
-    m_zoom += event->angleDelta().y() / 4.0f;
+    float delta = event->angleDelta().y() / 120.0f; // typically +1 or -1
+    float step = std::max(5.0f, std::abs(m_zoom) * 0.15f);
+    m_zoom += delta * step;
     update();
 }

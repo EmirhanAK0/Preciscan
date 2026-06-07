@@ -1,4 +1,4 @@
-﻿#include "laser_manager.h"
+#include "laser_manager.h"
 
 #include <iostream>
 #include <vector>
@@ -135,11 +135,10 @@ bool LaserManager::applyAcquisitionSettings()
 
     // 3) Trigger + profile config
     DWORD trig = buildTriggerValue();
-m_llt->SetFeature(FEATURE_FUNCTION_TRIGGER, trig);
-
-std::cout << "[LAZER] SetFeature(TRIGGER=" 
-          << (m_triggerMode == TriggerMode::Internal ? "INTERNAL" : "EXTERNAL")
-          << ") = " << trig << "\n";
+    int retTrig = m_llt->SetFeature(FEATURE_FUNCTION_TRIGGER, trig);
+    std::cout << "[LAZER] SetFeature(TRIGGER="
+              << (m_triggerMode == TriggerMode::Internal ? "INTERNAL" : "EXTERNAL")
+              << ") = " << retTrig << "\n";
 
     int retCfg = m_llt->SetProfileConfig(PROFILE);
     std::cout << "[LAZER] SetProfileConfig(PROFILE) = " << retCfg << "\n";

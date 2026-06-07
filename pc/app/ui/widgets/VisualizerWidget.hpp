@@ -20,6 +20,10 @@ public slots:
     void addProfile(float theta_deg, const QVector<QPointF>& profile, float tableZ = 66.0f, float zOffset = 3.5f, float lateralOffset = 0.0f);
     void setMesh(const QVector<QVector3D>& triangles); // 3'erli gruplar halinde v0,v1,v2
 
+    void setTopView();
+    void setFrontView();
+    void setLeftView();
+
 protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
@@ -27,6 +31,7 @@ protected:
 
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
 private:
@@ -34,11 +39,28 @@ private:
     void drawAxes();
     void drawPoints();
     void drawMesh();
+    void drawMeasurementBox();
+    void calculateAndDrawDimensions();
 
     QVector<QVector3D> m_points;
     QVector<QVector3D> m_meshTriangles;
+
+    // Camera/View State
     float m_xRot = 30.0f;
     float m_yRot = -45.0f;
+    float m_xPan = 0.0f;
+    float m_yPan = 0.0f;
     float m_zoom = -250.0f;
+    bool m_isOrtho = false;
     QPoint m_lastPos;
+
+    // Measurement Tool State
+    bool m_isMeasuring = false;
+    QPoint m_measureStart;
+    QPoint m_measureEnd;
+
+    // Overlay Buttons
+    class QPushButton* m_btnTop;
+    class QPushButton* m_btnFront;
+    class QPushButton* m_btnLeft;
 };

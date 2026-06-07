@@ -360,7 +360,8 @@ void ScanController::stopScan()
 // =====================================================================
 void ScanController::consumeHardwarePackets()
 {
-    if (!m_ring || !m_scanning || !m_laser)
+    // Lazer olmasa bile tetikleri oku (log'a dusur / 360 deg kontrolu yap)
+    if (!m_scanning)
         return;
 
     // ═══════════════════════════════════════════════════════════════
@@ -377,24 +378,41 @@ void ScanController::consumeHardwarePackets()
                 ++evtCount;
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
-                emit logMessage("MCU", QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg")
+                emit logMessage("MCU", QString("Tetik: seq=%1 aci=%2 deg")
                     .arg(evt.seq).arg(angleDeg, 0, 'f', 2));
                 m_encoderAngles.push(angleDeg);
             }
         }
         
-        // 2. Serial port üzerinden MCU (Arduino)
+        // 2. Serial port üzerinden MCU
         if (m_serialReader) {
+            // Text mesajlarini oku
+            std::string msg;
+            while (m_serialReader->tryGetMessage(msg)) {
+                emit logMessage("MCU", QString::fromStdString(msg));
+            }
+
             SerialTriggerReader::TriggerEvent evt;
             while (evtCount < MAX_EVENTS && m_serialReader->tryGetTriggerEvent(evt)) {
                 ++evtCount;
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
-                emit logMessage("MCU", QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg")
-                    .arg(evt.seq).arg(angleDeg, 0, 'f', 2));
+                emit logMessage("MCU", QString("Tetik: aci=%1 deg").arg(angleDeg, 0, 'f', 2));
                 m_encoderAngles.push(angleDeg);
+
+                // 360 derece tamamlandiysa durdur
+                if (angleDeg >= 359.5f || angleDeg <= -359.5f) {
+                    stopScan();
+                    return;
+                }
             }
         }
+
+
+        // Lazer bagli degilse profil eslestirme atlaniyor
+        if (!m_ring || !m_laser)
+            return;
+
         // Akilli eslestirme: Buffer'daki profilleri topla, son N tanesini
         // N bekleyen aciya dagit. Eski profilleri atla.
         //
@@ -468,7 +486,9 @@ void ScanController::consumeHardwarePackets()
         return;
     }
 
-    static constexpr int MAX_PER_TICK = 4;
+    // Saniyede 100 profil uretiliyor. Eger UI donarsa ve fps duserse MAX_PER_TICK 4 oldugunda
+    // tampon sisecek ve profil kaybedilecektir. Bu yuzden bu degeri guvenli bir miktara cikartiyoruz.
+    static constexpr int MAX_PER_TICK = 64;
     Packet pkt;
     int processed = 0;
 

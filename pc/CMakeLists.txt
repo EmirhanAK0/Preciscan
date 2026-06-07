@@ -89,6 +89,7 @@ if(Qt6_FOUND)
         io/serial_trigger_reader.cpp
         sim/mesh_slicer.cpp
         sim/laser_sim_worker.cpp
+        app.rc
     )
     target_include_directories(preciscan_ui PRIVATE app/ app/ui/ io/ sim/)
     target_link_libraries(preciscan_ui PRIVATE

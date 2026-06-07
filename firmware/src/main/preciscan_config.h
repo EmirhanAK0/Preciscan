@@ -25,7 +25,7 @@ static const float CFG_Z_MM_PER_STEP    = CFG_Z_LEAD_MM   / CFG_Z_STEPS_PER_REV;
 static const float CFG_ROT_DEG_PER_STEP = 360.0f / CFG_ROT_STEPS_PER_REV;
 
 // ---- Tarama Tetik Cozunurlugu ----
-static const float CFG_TRIGGER_DEG        = 2.0f;
+static const float CFG_TRIGGER_DEG        = 0.1f;
 static const float CFG_ROT_STEPS_PER_TRIG = CFG_ROT_STEPS_PER_REV / (360.0f / CFG_TRIGGER_DEG);
 
 // ---- Lineer Konumlandirma ----

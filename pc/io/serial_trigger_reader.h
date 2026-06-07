@@ -26,6 +26,7 @@ public:
     void stop();
 
     bool tryGetTriggerEvent(TriggerEvent& evt);
+    bool tryGetMessage(std::string& msg);
     size_t queueSize() const;
 
     /// Arduino'ya komut gonder (ornekin "ZMOVE:15.0\n")
@@ -48,6 +49,7 @@ private:
 
     mutable std::mutex m_queueMutex;
     std::queue<TriggerEvent> m_queue;
+    std::queue<std::string> m_msgQueue;
 
     std::mutex m_writeMutex;
 };
