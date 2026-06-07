@@ -14,6 +14,10 @@ public:
     const QVector<QVector3D>& getPoints() const { return m_points; }
     int pointCount() const { return m_points.size(); }
 
+    void setManualSelectionEnabled(bool enabled);
+    QVector<int> getSelectedPointIndices() const;
+    void clearSelection();
+
 public slots:
     void clearPoints();
     void addPoints(const QVector<QVector3D>& points);
@@ -63,4 +67,14 @@ private:
     class QPushButton* m_btnTop;
     class QPushButton* m_btnFront;
     class QPushButton* m_btnLeft;
+
+    // Selection State
+    bool m_selectionEnabled = false;
+    bool m_isSelecting = false;
+    QPoint m_selectionStart;
+    QPoint m_selectionEnd;
+    QVector<int> m_selectedIndices;
+    
+    void updateSelection();
+    void drawSelectionBox();
 };

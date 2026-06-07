@@ -19,6 +19,7 @@
 #include "panels/DiagnosticsPanel.hpp"
 #include "panels/ScanPanel.hpp"
 #include "panels/SetupPanel.hpp"
+#include "panels/ProcessPanel.hpp"
 #include "state/AppStateMachine.hpp"
 #include "widgets/ConnectingOverlay.hpp"
 #include "widgets/ProfileWidget.hpp"
@@ -169,10 +170,12 @@ void MainWindow::setupCentralWidget()
     auto* scanPanel  = m_scanPanel;
     auto* setupPanel = new SetupPanel(m_scanController, this);
     auto* diagPanel  = new DiagnosticsPanel(this);
+    auto* processPanel = new ProcessPanel(m_scanController, m_viz, this);
 
     m_tabWidget->addTab(scanPanel, "Scan");
     m_tabWidget->addTab(setupPanel, "Setup");
     m_tabWidget->addTab(diagPanel, "Diagnostics");
+    m_tabWidget->addTab(processPanel, "Data Processing");
 
     // Sinyal baglantilari
     connect(m_scanController, &ScanController::mcuConnectionChanged, scanPanel,

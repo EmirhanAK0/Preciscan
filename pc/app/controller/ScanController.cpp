@@ -14,6 +14,8 @@
 #include "../../net/spsc_ring_buffer.h"
 #include "../../sim/laser_sim_worker.h"
 #include "../../sim/mesh_slicer.h"
+#include "../utils/point_cloud_processor.h"
+#include <QThread>
 
 ScanController::ScanController(McuListener* mcu,
                                LaserManager* laser,
@@ -236,6 +238,9 @@ void ScanController::connectLaserSim(const QString& stlPath)
             this,
             [this](const QVector<QVector3D>& cloud) {
                 m_lastCloud = cloud;
+                m_originalCloud = cloud;
+                m_cloudHistory.clear();
+                emit historySizeChanged(0);
                 emit pointCloudReady(cloud);
                 stopScan();
             });
@@ -692,4 +697,69 @@ void ScanController::sendZHome()
 void ScanController::sendLinHome()
 {
     sendSerialCommand("HOME");
+}
+
+void ScanController::setLastCloud(const QVector<QVector3D>& cloud)
+{
+    m_lastCloud = cloud;
+    m_originalCloud = cloud;
+    m_cloudHistory.clear();
+    emit historySizeChanged(0);
+}
+
+void ScanController::applyFilterCylindrical(float radiusMm, float minZ, float maxZ)
+{
+    if (m_lastCloud.isEmpty()) return;
+
+    m_cloudHistory.push_back(m_lastCloud);
+    if (m_cloudHistory.size() > 5) {
+        m_cloudHistory.pop_front();
+    }
+    emit historySizeChanged(m_cloudHistory.size());
+
+    m_lastCloud = core::PointCloudProcessor::filterCylindrical(m_lastCloud, radiusMm, minZ, maxZ);
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", QString("Silindir filtre uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+}
+
+void ScanController::applyManualDeletion(const QVector<int>& indicesToRemove)
+{
+    if (m_lastCloud.isEmpty() || indicesToRemove.isEmpty()) return;
+
+    m_cloudHistory.push_back(m_lastCloud);
+    if (m_cloudHistory.size() > 5) {
+        m_cloudHistory.pop_front();
+    }
+    emit historySizeChanged(m_cloudHistory.size());
+
+    m_lastCloud = core::PointCloudProcessor::removePoints(m_lastCloud, indicesToRemove);
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", QString("Manuel silme uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+}
+
+void ScanController::undoLastFilter()
+{
+    if (m_cloudHistory.isEmpty()) return;
+
+    m_lastCloud = m_cloudHistory.last();
+    m_cloudHistory.pop_back();
+    emit historySizeChanged(m_cloudHistory.size());
+
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", "Geri al (Undo) islemi yapildi.");
+}
+
+void ScanController::resetCloud()
+{
+    if (m_originalCloud.isEmpty()) return;
+
+    m_cloudHistory.push_back(m_lastCloud);
+    if (m_cloudHistory.size() > 5) {
+        m_cloudHistory.pop_front();
+    }
+    emit historySizeChanged(m_cloudHistory.size());
+
+    m_lastCloud = m_originalCloud;
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", "Nokta bulutu orijinal haline donduruldu.");
 }

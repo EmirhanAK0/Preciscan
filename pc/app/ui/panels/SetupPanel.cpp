@@ -43,7 +43,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_dOffsetSpin->setRange(10.0, 500.0);
     m_dOffsetSpin->setDecimals(2);
     m_dOffsetSpin->setSingleStep(0.5);
-    m_dOffsetSpin->setValue(66.0);
+    m_dOffsetSpin->setValue(78.5);
     m_dOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_dOffsetSpin);
 
@@ -51,7 +51,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_lOffsetSpin->setRange(-100.0, 100.0);
     m_lOffsetSpin->setDecimals(2);
     m_lOffsetSpin->setSingleStep(0.5);
-    m_lOffsetSpin->setValue(0.0);
+    m_lOffsetSpin->setValue(2.0);
     m_lOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_lOffsetSpin);
 
@@ -160,6 +160,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::Encoder)));
     m_triggerModeCombo->addItem("External Trigger (Harici)",
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::ExternalTrigger)));
+    m_triggerModeCombo->setCurrentIndex(1); // Default to Encoder
     applySpinStyle(m_triggerModeCombo);
 
     auto* trigInfoLabel = new QLabel(

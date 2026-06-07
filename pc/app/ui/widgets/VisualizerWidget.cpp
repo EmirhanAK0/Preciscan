@@ -45,6 +45,26 @@ VisualizerWidget::VisualizerWidget(QWidget* parent) : QOpenGLWidget(parent)
 void VisualizerWidget::clearPoints()
 {
     m_points.clear();
+    m_selectedIndices.clear();
+    update();
+}
+
+void VisualizerWidget::setManualSelectionEnabled(bool enabled)
+{
+    m_selectionEnabled = enabled;
+    m_isSelecting = false;
+    if (!enabled) clearSelection();
+}
+
+QVector<int> VisualizerWidget::getSelectedPointIndices() const
+{
+    return m_selectedIndices;
+}
+
+void VisualizerWidget::clearSelection()
+{
+    m_selectedIndices.clear();
+    m_isSelecting = false;
     update();
 }
 
@@ -159,14 +179,21 @@ void VisualizerWidget::paintGL()
     
     // Draw 2D measurement overlay
     if (m_isMeasuring) {
-        QPainter painter(this);
         calculateAndDrawDimensions();
+    }
+    
+    // Draw 2D selection overlay
+    if (m_selectionEnabled && m_isSelecting) {
+        drawSelectionBox();
     }
 }
 
-void VisualizerWidget::drawMeasurementBox()
+void VisualizerWidget::drawSelectionBox()
 {
-    // Not used directly in OpenGL, QPainter is used in calculateAndDrawDimensions
+    QPainter painter(this);
+    painter.setPen(QPen(Qt::yellow, 2, Qt::DashLine));
+    painter.setBrush(QBrush(QColor(255, 255, 0, 40)));
+    painter.drawRect(QRect(m_selectionStart, m_selectionEnd).normalized());
 }
 
 void VisualizerWidget::calculateAndDrawDimensions()
@@ -315,33 +342,109 @@ void VisualizerWidget::drawPoints()
     glBegin(GL_POINTS);
     for (const auto& p : m_points)
     {
-        // Yukseklige gore Heatmap renk gradyani (Z: 0 - 30 mm arasi)
-        // Mavi (Alcak) -> Yesil (Orta) -> Kirmizi (Yuksek)
-        float factor = qBound(0.0f, p.z() / 30.0f, 1.0f);
-        
-        float r = 0.0f, g = 0.0f, b = 0.0f;
-        if (factor < 0.5f) {
-            b = 1.0f - (factor * 2.0f); // Maviden
-            g = factor * 2.0f;          // Yesile
+        // Select color based on selection state
+        bool isSelected = m_selectedIndices.contains(&p - m_points.constData());
+        if (isSelected) {
+            glColor3f(1.0f, 1.0f, 0.0f); // Yellow for selected
         } else {
-            g = 1.0f - ((factor - 0.5f) * 2.0f); // Yesilden
-            r = ((factor - 0.5f) * 2.0f);        // Kirmiziya
-        }
-        // Noktalari biraz daha parlak tutalim
-        r = qBound(0.2f, r, 1.0f);
-        g = qBound(0.2f, g, 1.0f);
-        b = qBound(0.2f, b, 1.0f);
+            // Yukseklige gore Heatmap renk gradyani (Z: 0 - 30 mm arasi)
+            // Mavi (Alcak) -> Yesil (Orta) -> Kirmizi (Yuksek)
+            float factor = qBound(0.0f, p.z() / 30.0f, 1.0f);
+            
+            float r = 0.0f, g = 0.0f, b = 0.0f;
+            if (factor < 0.5f) {
+                b = 1.0f - (factor * 2.0f); // Maviden
+                g = factor * 2.0f;          // Yesile
+            } else {
+                g = 1.0f - ((factor - 0.5f) * 2.0f); // Yesilden
+                r = ((factor - 0.5f) * 2.0f);        // Kirmiziya
+            }
+            // Noktalari biraz daha parlak tutalim
+            r = qBound(0.2f, r, 1.0f);
+            g = qBound(0.2f, g, 1.0f);
+            b = qBound(0.2f, b, 1.0f);
 
-        glColor3f(r, g, b);
+            glColor3f(r, g, b);
+        }
         glVertex3f(p.x(), p.y(), p.z());
     }
     glEnd();
 }
 
+void VisualizerWidget::updateSelection()
+{
+    if (m_points.isEmpty() || !m_selectionEnabled) return;
+
+    m_selectedIndices.clear();
+    QRect selectionRect = QRect(m_selectionStart, m_selectionEnd).normalized();
+    if (selectionRect.width() < 5 && selectionRect.height() < 5) {
+        return; // Too small, just a click
+    }
+
+    QMatrix4x4 modelView;
+    modelView.translate(m_xPan, m_yPan, m_zoom);
+    modelView.rotate(m_xRot, 1, 0, 0);
+    modelView.rotate(m_yRot, 0, 0, 1);
+
+    QMatrix4x4 projection;
+    float aspect = (float)width() / (height() ? (float)height() : 1.0f);
+    if (m_isOrtho) {
+        float orthoScale = std::abs(m_zoom) * 0.1f; 
+        projection.ortho(-aspect * orthoScale, aspect * orthoScale, -orthoScale, orthoScale, 0.1f, 5000.0f);
+    } else {
+        projection.frustum(-aspect * 0.1f, aspect * 0.1f, -0.1f, 0.1f, 0.1f, 5000.0f);
+    }
+
+    QMatrix4x4 MVP = projection * modelView;
+
+    // Convert screen selection rect to Normalized Device Coordinates (NDC)
+    // Screen X: 0 (left) to width (right) -> NDC X: -1 to 1
+    // Screen Y: 0 (top) to height (bottom) -> NDC Y: 1 to -1 (OpenGL Y is up)
+    float w = (float)width();
+    float h = (float)height();
+    
+    float ndc_xmin = (selectionRect.left() / w) * 2.0f - 1.0f;
+    float ndc_xmax = (selectionRect.right() / w) * 2.0f - 1.0f;
+    
+    // Y is inverted in screen coordinates
+    float ndc_ymin = ((h - selectionRect.bottom()) / h) * 2.0f - 1.0f;
+    float ndc_ymax = ((h - selectionRect.top()) / h) * 2.0f - 1.0f;
+
+    // Pre-allocate memory to avoid reallocations
+    m_selectedIndices.reserve(m_points.size() / 10); 
+
+    const QVector3D* data = m_points.constData();
+    int count = m_points.size();
+
+    for (int i = 0; i < count; ++i) {
+        // Direct matrix multiplication
+        QVector4D p_clip = MVP * QVector4D(data[i], 1.0f);
+        
+        if (p_clip.w() == 0.0f) continue;
+        
+        float nx = p_clip.x() / p_clip.w();
+        float ny = p_clip.y() / p_clip.w();
+        float nz = p_clip.z() / p_clip.w();
+
+        // Check if point is behind camera or outside near/far planes
+        if (nz < -1.0f || nz > 1.0f) continue;
+
+        if (nx >= ndc_xmin && nx <= ndc_xmax && ny >= ndc_ymin && ny <= ndc_ymax) {
+            m_selectedIndices.push_back(i);
+        }
+    }
+}
+
 void VisualizerWidget::mousePressEvent(QMouseEvent* event)
 {
     m_lastPos = event->pos();
-    if (event->button() == Qt::RightButton) {
+    if (m_selectionEnabled && event->button() == Qt::LeftButton) {
+        m_isSelecting = true;
+        m_selectionStart = event->pos();
+        m_selectionEnd = event->pos();
+        m_selectedIndices.clear();
+        update();
+    } else if (event->button() == Qt::RightButton && !m_selectionEnabled) {
         m_isMeasuring = true;
         m_measureStart = event->pos();
         m_measureEnd = event->pos();
@@ -354,11 +457,15 @@ void VisualizerWidget::mouseMoveEvent(QMouseEvent* event)
     int dx = event->position().x() - m_lastPos.x();
     int dy = event->position().y() - m_lastPos.y();
     
-    if (m_isMeasuring && (event->buttons() & Qt::RightButton)) {
+    if (m_isSelecting && (event->buttons() & Qt::LeftButton)) {
+        m_selectionEnd = event->pos();
+        update();
+    }
+    else if (m_isMeasuring && (event->buttons() & Qt::RightButton)) {
         m_measureEnd = event->pos();
         update();
     }
-    else if (event->buttons() & Qt::LeftButton)
+    else if (event->buttons() & Qt::LeftButton && !m_selectionEnabled)
     {
         m_xRot += dy * 0.5f;
         m_yRot += dx * 0.5f;
@@ -377,10 +484,13 @@ void VisualizerWidget::mouseMoveEvent(QMouseEvent* event)
 
 void VisualizerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::RightButton) {
-        // Keep measuring box visible until next click, or hide it? 
-        // We'll leave it visible so they can read the text.
-        // It gets cleared on next right click.
+    if (m_isSelecting && event->button() == Qt::LeftButton) {
+        updateSelection();
+        m_isSelecting = false;
+        update();
+    }
+    else if (event->button() == Qt::RightButton) {
+        // Keep measuring box visible until next click
     }
 }
 

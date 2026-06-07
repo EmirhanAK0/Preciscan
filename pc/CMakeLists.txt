@@ -75,6 +75,7 @@ if(Qt6_FOUND)
         app/ui/panels/ScanPanel.cpp
         app/ui/panels/SetupPanel.cpp
         app/ui/panels/DiagnosticsPanel.cpp
+        app/ui/panels/ProcessPanel.cpp
         app/ui/panels/LayerItemWidget.cpp
         app/ui/state/AppStateMachine.cpp
         app/ui/widgets/SpeedControl.cpp
@@ -84,6 +85,7 @@ if(Qt6_FOUND)
         app/ui/widgets/ProfileWidget.cpp
         app/ui/widgets/ConnectingOverlay.cpp
         app/controller/ScanController.cpp
+        app/utils/point_cloud_processor.cpp
         io/stl_loader.cpp
         io/ply_writer.cpp
         io/serial_trigger_reader.cpp
@@ -97,6 +99,14 @@ if(Qt6_FOUND)
         OpenGL::GL
         preciscan_net preciscan_hw
     )
+
+    # Copy LLT.dll to the executable directory
+    add_custom_command(TARGET preciscan_ui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/third_party/microepsilon/LLT.dll"
+        $<TARGET_FILE_DIR:preciscan_ui>
+    )
+
     target_compile_options(preciscan_ui PRIVATE /W4 /utf-8)
     message(STATUS "Qt6 bulundu — preciscan_ui hedefi aktif.")
 else()

@@ -3,6 +3,7 @@
 #include <2OXGFKMA2P/moc_MainWindow.cpp>
 #include <G7R4GG5PK3/moc_DiagnosticsPanel.cpp>
 #include <G7R4GG5PK3/moc_LayerItemWidget.cpp>
+#include <G7R4GG5PK3/moc_ProcessPanel.cpp>
 #include <G7R4GG5PK3/moc_ScanPanel.cpp>
 #include <G7R4GG5PK3/moc_SetupPanel.cpp>
 #include <SJKUZ3QAKT/moc_AppStateMachine.cpp>

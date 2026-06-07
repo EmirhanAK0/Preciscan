@@ -47,6 +47,9 @@ public:
     float resolution() const { return m_resolution; }
     float rps() const { return m_rps; }
 
+    const QVector<QVector3D>& getLastCloud() const { return m_lastCloud; }
+    void setLastCloud(const QVector<QVector3D>& cloud);
+
     int laserProfileRate() const { return m_laserProfileRate; }
     int laserShutterUs() const { return m_laserShutterUs; }
     bool laserAutoShutter() const { return m_laserAutoShutter; }
@@ -104,6 +107,13 @@ signals:
     void meshLoaded(const QVector<QVector3D>& triangles);
     void logMessage(const QString& level, const QString& msg);
     void triggerModeChanged(ScanTriggerMode mode);
+    void historySizeChanged(int size);
+
+public slots:
+    void applyFilterCylindrical(float radiusMm, float minZ = -1000.0f, float maxZ = 1000.0f);
+    void applyManualDeletion(const QVector<int>& indicesToRemove);
+    void undoLastFilter();
+    void resetCloud();
 
 private slots:
     void consumeHardwarePackets();
@@ -122,8 +132,8 @@ private:
     QString m_stlPath;
     sim::LaserSimWorker* m_simWorker{nullptr};
 
-    float m_dOffset{66.0f};
-    float m_lOffset{0.0f};
+    float m_dOffset{78.5f};
+    float m_lOffset{2.0f};
     float m_resolution{1.0f};
     float m_rps{10.0f};
 
@@ -133,7 +143,9 @@ private:
     QString m_laserMeasuringField{"large"};
     int m_laserPointsPerProfile{1280};
 
+    QVector<QVector3D> m_originalCloud;
     QVector<QVector3D> m_lastCloud;
+    QVector<QVector<QVector3D>> m_cloudHistory;
 
     QTimer* m_hwTimer{nullptr};
     float m_hwAngle{0.0f};
