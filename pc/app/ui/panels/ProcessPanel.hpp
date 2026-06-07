@@ -6,6 +6,7 @@ class ScanController;
 class VisualizerWidget;
 class QPushButton;
 class QDoubleSpinBox;
+class QSpinBox;
 class QCheckBox;
 
 class ProcessPanel : public QWidget {
@@ -17,24 +18,38 @@ public slots:
     void onHistorySizeChanged(int size);
 
 private slots:
-    void onApplyAutoFilter();
+    void onApplyCylindricalFilter();
+    void onApplySORFilter();
+    void onApplyRORFilter();
+    void onApplyVoxelGridFilter();
+    void onDeleteSelected();
+    void onEnableManualSelection(int state);
     void onUndo();
     void onReset();
-    void onEnableManualSelection(int state);
-    void onDeleteSelected();
 
 private:
     ScanController* m_controller;
     VisualizerWidget* m_viz;
 
+    // Cylindrical
     QDoubleSpinBox* m_radiusSpin;
     QDoubleSpinBox* m_minZSpin;
     QDoubleSpinBox* m_maxZSpin;
-    
-    QPushButton* m_btnAutoFilter;
-    QPushButton* m_btnUndo;
-    QPushButton* m_btnReset;
+
+    // SOR
+    QSpinBox* m_sorNeighborsSpin;
+    QDoubleSpinBox* m_sorStdDevSpin;
+
+    // ROR
+    QDoubleSpinBox* m_rorRadiusSpin;
+    QSpinBox* m_rorMinPtsSpin;
+
+    // Voxel Grid
+    QDoubleSpinBox* m_voxelLeafSpin;
 
     QCheckBox* m_chkManualSelect;
     QPushButton* m_btnDeleteSelected;
+
+    QPushButton* m_btnUndo;
+    QPushButton* m_btnReset;
 };

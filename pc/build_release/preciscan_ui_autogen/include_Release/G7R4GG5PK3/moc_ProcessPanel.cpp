@@ -42,12 +42,15 @@ template <> constexpr inline auto ProcessPanel::qt_create_metaobjectdata<qt_meta
         "onHistorySizeChanged",
         "",
         "size",
-        "onApplyAutoFilter",
-        "onUndo",
-        "onReset",
+        "onApplyCylindricalFilter",
+        "onApplySORFilter",
+        "onApplyRORFilter",
+        "onApplyVoxelGridFilter",
+        "onDeleteSelected",
         "onEnableManualSelection",
         "state",
-        "onDeleteSelected"
+        "onUndo",
+        "onReset"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -55,18 +58,24 @@ template <> constexpr inline auto ProcessPanel::qt_create_metaobjectdata<qt_meta
         QtMocHelpers::SlotData<void(int)>(1, 2, QMC::AccessPublic, QMetaType::Void, {{
             { QMetaType::Int, 3 },
         }}),
-        // Slot 'onApplyAutoFilter'
+        // Slot 'onApplyCylindricalFilter'
         QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onUndo'
+        // Slot 'onApplySORFilter'
         QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onReset'
+        // Slot 'onApplyRORFilter'
         QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onEnableManualSelection'
-        QtMocHelpers::SlotData<void(int)>(7, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 8 },
-        }}),
+        // Slot 'onApplyVoxelGridFilter'
+        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onDeleteSelected'
-        QtMocHelpers::SlotData<void()>(9, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onEnableManualSelection'
+        QtMocHelpers::SlotData<void(int)>(9, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 10 },
+        }}),
+        // Slot 'onUndo'
+        QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onReset'
+        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -91,11 +100,14 @@ void ProcessPanel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
         case 0: _t->onHistorySizeChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 1: _t->onApplyAutoFilter(); break;
-        case 2: _t->onUndo(); break;
-        case 3: _t->onReset(); break;
-        case 4: _t->onEnableManualSelection((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 1: _t->onApplyCylindricalFilter(); break;
+        case 2: _t->onApplySORFilter(); break;
+        case 3: _t->onApplyRORFilter(); break;
+        case 4: _t->onApplyVoxelGridFilter(); break;
         case 5: _t->onDeleteSelected(); break;
+        case 6: _t->onEnableManualSelection((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 7: _t->onUndo(); break;
+        case 8: _t->onReset(); break;
         default: ;
         }
     }
@@ -120,14 +132,14 @@ int ProcessPanel::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 6)
+        if (_id < 9)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 6;
+        _id -= 9;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 6)
+        if (_id < 9)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 6;
+        _id -= 9;
     }
     return _id;
 }

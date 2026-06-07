@@ -722,6 +722,51 @@ void ScanController::applyFilterCylindrical(float radiusMm, float minZ, float ma
     emit logMessage("SYS", QString("Silindir filtre uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
 }
 
+void ScanController::applyFilterStatistical(int meanK, float stdDevThresh)
+{
+    if (m_lastCloud.isEmpty()) return;
+
+    m_cloudHistory.push_back(m_lastCloud);
+    if (m_cloudHistory.size() > 5) {
+        m_cloudHistory.pop_front();
+    }
+    emit historySizeChanged(m_cloudHistory.size());
+
+    m_lastCloud = core::PointCloudProcessor::filterStatisticalOutlier(m_lastCloud, meanK, stdDevThresh);
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", QString("SOR (Statistical) uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+}
+
+void ScanController::applyFilterRadius(float radiusMm, int minNeighbors)
+{
+    if (m_lastCloud.isEmpty()) return;
+
+    m_cloudHistory.push_back(m_lastCloud);
+    if (m_cloudHistory.size() > 5) {
+        m_cloudHistory.pop_front();
+    }
+    emit historySizeChanged(m_cloudHistory.size());
+
+    m_lastCloud = core::PointCloudProcessor::filterRadiusOutlier(m_lastCloud, radiusMm, minNeighbors);
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", QString("ROR (Radius) uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+}
+
+void ScanController::applyFilterVoxelGrid(float leafSizeMm)
+{
+    if (m_lastCloud.isEmpty()) return;
+
+    m_cloudHistory.push_back(m_lastCloud);
+    if (m_cloudHistory.size() > 5) {
+        m_cloudHistory.pop_front();
+    }
+    emit historySizeChanged(m_cloudHistory.size());
+
+    m_lastCloud = core::PointCloudProcessor::filterVoxelGrid(m_lastCloud, leafSizeMm);
+    emit pointCloudReady(m_lastCloud);
+    emit logMessage("SYS", QString("Voxel Grid (%1 mm) uygulandi. Kalan nokta: %2").arg(leafSizeMm).arg(m_lastCloud.size()));
+}
+
 void ScanController::applyManualDeletion(const QVector<int>& indicesToRemove)
 {
     if (m_lastCloud.isEmpty() || indicesToRemove.isEmpty()) return;

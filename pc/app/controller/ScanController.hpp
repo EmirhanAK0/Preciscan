@@ -110,7 +110,11 @@ signals:
     void historySizeChanged(int size);
 
 public slots:
-    void applyFilterCylindrical(float radiusMm, float minZ = -1000.0f, float maxZ = 1000.0f);
+    void applyFilterCylindrical(float radiusMm, float minZ, float maxZ);
+    void applyFilterStatistical(int meanK, float stdDevThresh);
+    void applyFilterRadius(float radiusMm, int minNeighbors);
+    void applyFilterVoxelGrid(float leafSizeMm);
+
     void applyManualDeletion(const QVector<int>& indicesToRemove);
     void undoLastFilter();
     void resetCloud();

@@ -6,6 +6,7 @@
 #include <QGroupBox>
 #include <QPushButton>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QCheckBox>
@@ -15,9 +16,68 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
 {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(15);
+    mainLayout->setSpacing(10);
 
-    // Auto Filters
+    // Voxel Grid Filter
+    QGroupBox* gbVoxel = new QGroupBox("Voxel Grid (Seyreltme)", this);
+    QVBoxLayout* lVoxel = new QVBoxLayout(gbVoxel);
+    QHBoxLayout* hVoxel = new QHBoxLayout();
+    hVoxel->addWidget(new QLabel("Küp Boyutu (mm):", this));
+    m_voxelLeafSpin = new QDoubleSpinBox(this);
+    m_voxelLeafSpin->setRange(0.1, 50.0);
+    m_voxelLeafSpin->setValue(1.0);
+    m_voxelLeafSpin->setSingleStep(0.5);
+    hVoxel->addWidget(m_voxelLeafSpin);
+    lVoxel->addLayout(hVoxel);
+    QPushButton* btnVoxel = new QPushButton("Seyrelt (Downsample)", this);
+    lVoxel->addWidget(btnVoxel);
+    mainLayout->addWidget(gbVoxel);
+
+    // SOR Filter
+    QGroupBox* gbSOR = new QGroupBox("Statistical Outlier Removal (SOR)", this);
+    QVBoxLayout* lSOR = new QVBoxLayout(gbSOR);
+    QHBoxLayout* hSOR1 = new QHBoxLayout();
+    hSOR1->addWidget(new QLabel("Komşu Sayısı:", this));
+    m_sorNeighborsSpin = new QSpinBox(this);
+    m_sorNeighborsSpin->setRange(1, 200);
+    m_sorNeighborsSpin->setValue(50);
+    hSOR1->addWidget(m_sorNeighborsSpin);
+    lSOR->addLayout(hSOR1);
+    QHBoxLayout* hSOR2 = new QHBoxLayout();
+    hSOR2->addWidget(new QLabel("Standart Sapma:", this));
+    m_sorStdDevSpin = new QDoubleSpinBox(this);
+    m_sorStdDevSpin->setRange(0.1, 10.0);
+    m_sorStdDevSpin->setValue(1.0);
+    m_sorStdDevSpin->setSingleStep(0.1);
+    hSOR2->addWidget(m_sorStdDevSpin);
+    lSOR->addLayout(hSOR2);
+    QPushButton* btnSOR = new QPushButton("Gürültüyü Temizle (SOR)", this);
+    lSOR->addWidget(btnSOR);
+    mainLayout->addWidget(gbSOR);
+
+    // ROR Filter
+    QGroupBox* gbROR = new QGroupBox("Radius Outlier Removal (ROR)", this);
+    QVBoxLayout* lROR = new QVBoxLayout(gbROR);
+    QHBoxLayout* hROR1 = new QHBoxLayout();
+    hROR1->addWidget(new QLabel("Yarıçap (mm):", this));
+    m_rorRadiusSpin = new QDoubleSpinBox(this);
+    m_rorRadiusSpin->setRange(0.1, 100.0);
+    m_rorRadiusSpin->setValue(2.0);
+    m_rorRadiusSpin->setSingleStep(0.5);
+    hROR1->addWidget(m_rorRadiusSpin);
+    lROR->addLayout(hROR1);
+    QHBoxLayout* hROR2 = new QHBoxLayout();
+    hROR2->addWidget(new QLabel("Min Nokta:", this));
+    m_rorMinPtsSpin = new QSpinBox(this);
+    m_rorMinPtsSpin->setRange(1, 200);
+    m_rorMinPtsSpin->setValue(10);
+    hROR2->addWidget(m_rorMinPtsSpin);
+    lROR->addLayout(hROR2);
+    QPushButton* btnROR = new QPushButton("Gürültüyü Temizle (ROR)", this);
+    lROR->addWidget(btnROR);
+    mainLayout->addWidget(gbROR);
+
+    // Auto Filters (Cylindrical)
     QGroupBox* gbAuto = new QGroupBox("Otomatik Filtreler (Silindir)", this);
     QVBoxLayout* lAuto = new QVBoxLayout(gbAuto);
 
@@ -41,7 +101,7 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     hZ->addWidget(m_maxZSpin);
     lAuto->addLayout(hZ);
 
-    m_btnAutoFilter = new QPushButton("Silindir Disini Sil", this);
+    QPushButton* m_btnAutoFilter = new QPushButton("Silindir Disini Sil", this);
     lAuto->addWidget(m_btnAutoFilter);
     mainLayout->addWidget(gbAuto);
 
@@ -73,7 +133,10 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     mainLayout->addStretch();
 
     // Connections
-    connect(m_btnAutoFilter, &QPushButton::clicked, this, &ProcessPanel::onApplyAutoFilter);
+    connect(btnVoxel, &QPushButton::clicked, this, &ProcessPanel::onApplyVoxelGridFilter);
+    connect(btnSOR, &QPushButton::clicked, this, &ProcessPanel::onApplySORFilter);
+    connect(btnROR, &QPushButton::clicked, this, &ProcessPanel::onApplyRORFilter);
+    connect(m_btnAutoFilter, &QPushButton::clicked, this, &ProcessPanel::onApplyCylindricalFilter);
     connect(m_chkManualSelect, &QCheckBox::stateChanged, this, &ProcessPanel::onEnableManualSelection);
     connect(m_btnDeleteSelected, &QPushButton::clicked, this, &ProcessPanel::onDeleteSelected);
     connect(m_btnUndo, &QPushButton::clicked, this, &ProcessPanel::onUndo);
@@ -82,7 +145,7 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     connect(m_controller, &ScanController::historySizeChanged, this, &ProcessPanel::onHistorySizeChanged);
 }
 
-void ProcessPanel::onApplyAutoFilter()
+void ProcessPanel::onApplyCylindricalFilter()
 {
     if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
         m_controller->setLastCloud(m_viz->getPoints());
@@ -92,6 +155,30 @@ void ProcessPanel::onApplyAutoFilter()
     float minZ = m_minZSpin->value();
     float maxZ = m_maxZSpin->value();
     m_controller->applyFilterCylindrical(r, minZ, maxZ);
+}
+
+void ProcessPanel::onApplySORFilter()
+{
+    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
+        m_controller->setLastCloud(m_viz->getPoints());
+    }
+    m_controller->applyFilterStatistical(m_sorNeighborsSpin->value(), m_sorStdDevSpin->value());
+}
+
+void ProcessPanel::onApplyRORFilter()
+{
+    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
+        m_controller->setLastCloud(m_viz->getPoints());
+    }
+    m_controller->applyFilterRadius(m_rorRadiusSpin->value(), m_rorMinPtsSpin->value());
+}
+
+void ProcessPanel::onApplyVoxelGridFilter()
+{
+    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
+        m_controller->setLastCloud(m_viz->getPoints());
+    }
+    m_controller->applyFilterVoxelGrid(m_voxelLeafSpin->value());
 }
 
 void ProcessPanel::onEnableManualSelection(int state)

@@ -117,6 +117,13 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "radiusMm",
         "minZ",
         "maxZ",
+        "applyFilterStatistical",
+        "meanK",
+        "stdDevThresh",
+        "applyFilterRadius",
+        "minNeighbors",
+        "applyFilterVoxelGrid",
+        "leafSizeMm",
         "applyManualDeletion",
         "QList<int>",
         "indicesToRemove",
@@ -268,24 +275,28 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         QtMocHelpers::SlotData<void(float, float, float)>(74, 2, QMC::AccessPublic, QMetaType::Void, {{
             { QMetaType::Float, 75 }, { QMetaType::Float, 76 }, { QMetaType::Float, 77 },
         }}),
-        // Slot 'applyFilterCylindrical'
-        QtMocHelpers::SlotData<void(float, float)>(74, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void, {{
-            { QMetaType::Float, 75 }, { QMetaType::Float, 76 },
+        // Slot 'applyFilterStatistical'
+        QtMocHelpers::SlotData<void(int, float)>(78, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 79 }, { QMetaType::Float, 80 },
         }}),
-        // Slot 'applyFilterCylindrical'
-        QtMocHelpers::SlotData<void(float)>(74, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void, {{
-            { QMetaType::Float, 75 },
+        // Slot 'applyFilterRadius'
+        QtMocHelpers::SlotData<void(float, int)>(81, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 75 }, { QMetaType::Int, 82 },
+        }}),
+        // Slot 'applyFilterVoxelGrid'
+        QtMocHelpers::SlotData<void(float)>(83, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 84 },
         }}),
         // Slot 'applyManualDeletion'
-        QtMocHelpers::SlotData<void(const QVector<int> &)>(78, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 79, 80 },
+        QtMocHelpers::SlotData<void(const QVector<int> &)>(85, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 86, 87 },
         }}),
         // Slot 'undoLastFilter'
-        QtMocHelpers::SlotData<void()>(81, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(88, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'resetCloud'
-        QtMocHelpers::SlotData<void()>(82, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(89, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'consumeHardwarePackets'
-        QtMocHelpers::SlotData<void()>(83, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(90, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -352,19 +363,20 @@ void ScanController::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
         case 39: _t->sendZHome(); break;
         case 40: _t->sendLinHome(); break;
         case 41: _t->applyFilterCylindrical((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3]))); break;
-        case 42: _t->applyFilterCylindrical((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
-        case 43: _t->applyFilterCylindrical((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 44: _t->applyManualDeletion((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1]))); break;
-        case 45: _t->undoLastFilter(); break;
-        case 46: _t->resetCloud(); break;
-        case 47: _t->consumeHardwarePackets(); break;
+        case 42: _t->applyFilterStatistical((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
+        case 43: _t->applyFilterRadius((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[2]))); break;
+        case 44: _t->applyFilterVoxelGrid((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 45: _t->applyManualDeletion((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1]))); break;
+        case 46: _t->undoLastFilter(); break;
+        case 47: _t->resetCloud(); break;
+        case 48: _t->consumeHardwarePackets(); break;
         default: ;
         }
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
         switch (_id) {
         default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
-        case 44:
+        case 45:
             switch (*reinterpret_cast<int*>(_a[1])) {
             default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
             case 0:
@@ -426,14 +438,14 @@ int ScanController::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 48)
+        if (_id < 49)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 48;
+        _id -= 49;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 48)
+        if (_id < 49)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 48;
+        _id -= 49;
     }
     return _id;
 }
