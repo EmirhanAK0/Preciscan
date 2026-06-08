@@ -181,12 +181,12 @@ static void start_z_move(AppController* app, float mm) {
     axis_start_move_mm(&app->z_axis, mm);
 }
 
-static void start_scan(AppController* app) {
+static void start_scan(AppController* app, bool cw) {
     axis_stop(&app->lin_axis);
     axis_stop(&app->z_axis);
     app->state = SYS_SCANNING;
     uart_comm_println("STATUS:SCANNING");
-    scan_start(&app->scanner);
+    scan_start(&app->scanner, cw);
 }
 
 static void stop_scan(AppController* app) {
@@ -212,8 +212,12 @@ static void process_command(AppController* app, const char* cmd) {
             uart_comm_println("STATUS:ERR:BUSY");
         }
     }
-    else if (strcmp(cmd, "START") == 0) {
-        if (app->state == SYS_READY) start_scan(app);
+    else if (strcmp(cmd, "START_CW") == 0) {
+        if (app->state == SYS_READY) start_scan(app, true);
+        else uart_comm_println("STATUS:ERR:NOT_READY");
+    }
+    else if (strcmp(cmd, "START_CCW") == 0) {
+        if (app->state == SYS_READY) start_scan(app, false);
         else uart_comm_println("STATUS:ERR:NOT_READY");
     }
     else if (strcmp(cmd, "STOP") == 0) {

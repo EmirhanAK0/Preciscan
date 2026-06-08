@@ -106,7 +106,10 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         "color:#777; font-size:10px; padding:2px; background:#111; border-radius:3px;");
     root->addWidget(m_scanStatusLabel);
 
-    auto* btnRow = new QHBoxLayout;
+    m_scanDirCombo = new QComboBox(this);
+    m_scanDirCombo->addItem("İleri (CW)");
+    m_scanDirCombo->addItem("Geri (CCW)");
+    
     m_startBtn   = new QPushButton("TARAMAYI BASLAT", this);
     m_startBtn->setEnabled(false);
     m_startBtn->setStyleSheet(
@@ -124,8 +127,11 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         "QPushButton:hover:enabled{background:#e74c3c;color:#fff;} "
         "QPushButton:disabled{background:#1a1a1a;color:#444;border-color:#333;}");
 
+    QHBoxLayout* btnRow = new QHBoxLayout;
+    btnRow->setSpacing(5);
+    btnRow->addWidget(m_scanDirCombo, 0);
     btnRow->addWidget(m_startBtn, 1);
-    btnRow->addWidget(m_stopBtn, 0);
+    btnRow->addWidget(m_stopBtn, 1);
     root->addLayout(btnRow);
 
     // -- Katmanlar -----------------------------------------------
@@ -142,7 +148,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     auto* mergeRow = new QHBoxLayout;
     m_mergeMode    = new QComboBox(this);
-    m_mergeMode->addItems({"Birlestir (Z-Offset)"});
+    m_mergeMode->addItems({"Birlestir (Z-Offset)", "ICP ile Birlestir (Duz)", "ICP ile Birlestir (Ters Tarama)"});
     m_mergeMode->setStyleSheet("background:#1a1a1a;color:#ccc;border:1px solid "
                                "#333;border-radius:3px;padding:2px;font-size:10px;");
     m_mergeBtn = new QPushButton("Birlestir", this);
@@ -276,10 +282,13 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             return;
         }
 
+        if (!m_ctrl) return;
+        const auto& layers = m_ctrl->getLayers();
+
         QVector<QVector3D> merged;
         for (int id : selectedIds) {
-            if (!m_layers.contains(id)) continue;
-            const ScanLayerData& layer = m_layers[id];
+            if (!layers.contains(id)) continue;
+            const ScanLayerData& layer = layers[id];
             float zOff = layer.zOffsetMm;
             for (const auto& p : layer.points) {
                 merged.push_back(QVector3D(p.x(), p.y(), p.z() + zOff));
@@ -313,9 +322,14 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         connect(m_ctrl, &ScanController::laserConnectionChanged, this,
                 &ScanPanel::onLaserConnected);
         connect(m_ctrl, &ScanController::logMessage, this, &ScanPanel::appendLog);
+        connect(m_ctrl, &ScanController::layersUpdated, this, &ScanPanel::rebuildLayerListUI);
+        connect(m_ctrl, &ScanController::activeLayerChanged, this, &ScanPanel::rebuildLayerListUI);
     }
 
     appendLog("SYS", "ScanPanel hazir.");
+    
+    // Baslangicta katmanlari ciz
+    rebuildLayerListUI();
 }
 
 // ===================================================================
@@ -324,50 +338,39 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
 void ScanPanel::addLayer(const QVector<QVector3D>& points)
 {
-    if (points.isEmpty())
-        return;
-
-    int id = m_nextLayerId++;
-    ScanLayerData layer;
-    layer.name = QString("Tarama %1").arg(id + 1);
-    layer.points = points;
-    layer.zOffsetMm = 0.0f;
-    m_layers.insert(id, layer);
-
-    rebuildLayerListUI();
-    appendLog("OK", QString("Katman eklendi: '%1' (%2 nokta)")
-                        .arg(layer.name)
-                        .arg(points.size()));
+    // Cagirilan yerler artik direkt ScanController::addNewLayer kullanacak
 }
 
 void ScanPanel::onDeleteLayer(int layerId)
 {
-    if (m_layers.contains(layerId)) {
-        QString name = m_layers[layerId].name;
-        m_layers.remove(layerId);
-        rebuildLayerListUI();
-        appendLog("SYS", QString("Katman silindi: '%1'").arg(name));
+    if (m_ctrl) {
+        m_ctrl->deleteLayer(layerId);
     }
 }
 
 void ScanPanel::onLayerZOffsetChanged(int layerId, float mm)
 {
-    if (m_layers.contains(layerId)) {
-        m_layers[layerId].zOffsetMm = mm;
+    if (m_ctrl) {
+        m_ctrl->setLayerZOffset(layerId, mm);
     }
 }
 
 void ScanPanel::rebuildLayerListUI()
 {
     m_layerList->clear();
+    
+    if (!m_ctrl) return;
+    const auto& layers = m_ctrl->getLayers();
+    int activeId = m_ctrl->getActiveLayerId();
 
-    for (auto it = m_layers.constBegin(); it != m_layers.constEnd(); ++it) {
+    for (auto it = layers.constBegin(); it != layers.constEnd(); ++it) {
         int id = it.key();
         const ScanLayerData& data = it.value();
 
         auto* item = new QListWidgetItem(m_layerList);
         auto* widget = new LayerItemWidget(id, data.name, data.points.size(), this);
         widget->setZOffset(data.zOffsetMm);
+        widget->setActive(id == activeId);
 
         connect(widget, &LayerItemWidget::deleteRequested,
                 this, &ScanPanel::onDeleteLayer);
@@ -375,8 +378,13 @@ void ScanPanel::rebuildLayerListUI()
                 this, &ScanPanel::onLayerZOffsetChanged);
         connect(widget, &LayerItemWidget::nameChanged,
                 this, [this](int lid, const QString& newName) {
-                    if (m_layers.contains(lid))
-                        m_layers[lid].name = newName;
+                    if (m_ctrl)
+                        m_ctrl->setLayerName(lid, newName);
+                });
+        connect(widget, &LayerItemWidget::activated,
+                this, [this](int lid) {
+                    if (m_ctrl)
+                        m_ctrl->setActiveLayer(lid);
                 });
 
         item->setSizeHint(widget->sizeHint());
@@ -387,10 +395,8 @@ void ScanPanel::rebuildLayerListUI()
 // ===================================================================
 // Birlestirme
 // ===================================================================
-
 void ScanPanel::onMergeClicked()
 {
-    // Secili katmanlari topla
     QVector<int> selectedIds;
     for (int i = 0; i < m_layerList->count(); ++i) {
         auto* item = m_layerList->item(i);
@@ -401,34 +407,13 @@ void ScanPanel::onMergeClicked()
     }
 
     if (selectedIds.size() < 2) {
-        appendLog("WARN", "Birlestirilecek en az 2 katman secin.");
+        QMessageBox::warning(this, "Hata", "Birlestirme icin en az 2 katman secilmeli.");
         return;
     }
 
-    // Z-offset uygulayarak birlestir
-    QVector<QVector3D> merged;
-    for (int id : selectedIds) {
-        if (!m_layers.contains(id))
-            continue;
-
-        const ScanLayerData& layer = m_layers[id];
-        float zOff = layer.zOffsetMm;
-
-        for (const auto& p : layer.points) {
-            merged.push_back(QVector3D(p.x(), p.y(), p.z() + zOff));
-        }
-
-        appendLog("SYS", QString("  '%1': %2 nokta, Z-offset: %3 mm")
-                             .arg(layer.name)
-                             .arg(layer.points.size())
-                             .arg(zOff, 0, 'f', 1));
+    if (m_ctrl) {
+        m_ctrl->mergeSelectedLayers(selectedIds, m_mergeMode->currentText());
     }
-
-    appendLog("OK", QString("%1 katman birlestirildi -> %2 toplam nokta")
-                        .arg(selectedIds.size())
-                        .arg(merged.size()));
-
-    emit mergedCloudReady(merged);
 }
 
 // ===================================================================
@@ -437,8 +422,10 @@ void ScanPanel::onMergeClicked()
 
 void ScanPanel::onStartClicked()
 {
-    if (m_ctrl)
-        m_ctrl->startScan();
+    if (m_ctrl) {
+        int dir = m_scanDirCombo->currentIndex(); // 0: CW, 1: CCW
+        m_ctrl->startScan(dir);
+    }
 }
 void ScanPanel::onStopClicked()
 {
@@ -448,6 +435,7 @@ void ScanPanel::onStopClicked()
 
 void ScanPanel::onScanStarted()
 {
+    m_scanDirCombo->setEnabled(false);
     m_startBtn->setEnabled(false);
     m_stopBtn->setEnabled(true);
     m_scanStatusLabel->setText("TARAMA AKTIF");
@@ -457,6 +445,7 @@ void ScanPanel::onScanStarted()
 
 void ScanPanel::onScanStopped()
 {
+    m_scanDirCombo->setEnabled(true);
     m_startBtn->setEnabled(m_mcuReady || m_laserReady);
     m_stopBtn->setEnabled(false);
     m_scanStatusLabel->setText("Durduruldu");

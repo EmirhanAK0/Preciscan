@@ -26,6 +26,11 @@ private slots:
     void onEnableManualSelection(int state);
     void onUndo();
     void onReset();
+    void onGenerateMesh();
+    void onSaveMesh();
+    void onClearMesh();
+    void onLoadPLY();
+    void onExportPLY();
 
 private:
     ScanController* m_controller;
@@ -52,4 +57,11 @@ private:
 
     QPushButton* m_btnUndo;
     QPushButton* m_btnReset;
+
+    QPushButton* m_btnGenerateMesh;
+    QPushButton* m_btnSaveMesh;
+    QPushButton* m_btnClearMesh;
+
+    QPushButton* m_btnLoadPLY;
+    QPushButton* m_btnExportPLY;
 };

@@ -3,6 +3,7 @@
 #include <QVector>
 #include <QVector3D>
 #include <QMatrix4x4>
+#include <QQuaternion>
 #include "../../third_party/nanoflann.hpp"
 
 namespace core {
@@ -41,11 +42,14 @@ public:
     static QVector<QVector3D> filterRadiusOutlier(const QVector<QVector3D>& input, float radius = 2.0f, int minNeighbors = 10);
     static QVector<QVector3D> filterVoxelGrid(const QVector<QVector3D>& input, float leafSize = 1.0f);
 
+    // Hızlı Silindirik Mesh (Triangulation)
+    static QVector<QVector3D> generateCylindricalMesh(const QVector<QVector3D>& input, int angleSteps = 720, int zSteps = 1000);
+
     // Kaba (Coarse) Hizalama
     static QVector<QVector3D> transformCloud(const QVector<QVector3D>& input, const QMatrix4x4& transform);
 
     // Hassas Hizalama (ICP - Iterative Closest Point)
-    static QMatrix4x4 calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, int maxIterations = 50, float tolerance = 1e-5f);
+    static QMatrix4x4 calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, bool isInverse = false, int maxIterations = 50, float tolerance = 1e-5f);
 };
 
 } // namespace core

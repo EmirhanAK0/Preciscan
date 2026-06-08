@@ -12,10 +12,11 @@ void scan_init(ScanEngine* eng) {
     eng->running           = false;
 }
 
-void scan_start(ScanEngine* eng) {
+void scan_start(ScanEngine* eng, bool cw) {
     eng->running     = true;
     eng->step_accum  = 0.0f;
     eng->total_steps = 0;
+    eng->direction   = cw;
     stepper_set_dir(&eng->rot_motor, eng->direction);
     stepper_enable(&eng->rot_motor);
 }
@@ -41,9 +42,6 @@ bool scan_update(ScanEngine* eng, uint32_t now_us, float* angle_out) {
             laser_fire(&eng->laser);
 
             float a = (float)eng->total_steps * CFG_ROT_DEG_PER_STEP;
-            // Pozitif aciya normalize et (0-360)
-            a = fmodf(a, 360.0f);
-            if (a < 0) a += 360.0f;
             
             if (angle_out) *angle_out = a;
             return true;

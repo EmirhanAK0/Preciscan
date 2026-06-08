@@ -24,6 +24,9 @@ public:
                              int pointCount, QWidget* parent = nullptr);
 
     bool    isSelected() const;
+    bool    isActive()   const { return m_isActive; }
+    void    setActive(bool active);
+    
     int     layerId()    const { return m_layerId; }
     QString layerName()  const;
     float   zOffset()    const;
@@ -34,9 +37,14 @@ signals:
     void deleteRequested(int layerId);
     void nameChanged(int layerId, const QString& newName);
     void zOffsetChanged(int layerId, float mm);
+    void activated(int layerId);
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     int            m_layerId;
+    bool           m_isActive = false;
     QCheckBox*     m_check;
     QLineEdit*     m_nameEdit;
     QDoubleSpinBox* m_zOffsetSpin;

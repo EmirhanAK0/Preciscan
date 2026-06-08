@@ -45,7 +45,8 @@ template <> constexpr inline auto LayerItemWidget::qt_create_metaobjectdata<qt_m
         "nameChanged",
         "newName",
         "zOffsetChanged",
-        "mm"
+        "mm",
+        "activated"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -60,6 +61,10 @@ template <> constexpr inline auto LayerItemWidget::qt_create_metaobjectdata<qt_m
         // Signal 'zOffsetChanged'
         QtMocHelpers::SignalData<void(int, float)>(6, 2, QMC::AccessPublic, QMetaType::Void, {{
             { QMetaType::Int, 3 }, { QMetaType::Float, 7 },
+        }}),
+        // Signal 'activated'
+        QtMocHelpers::SignalData<void(int)>(8, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 3 },
         }}),
     };
     QtMocHelpers::UintData qt_properties {
@@ -87,6 +92,7 @@ void LayerItemWidget::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
         case 0: _t->deleteRequested((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
         case 1: _t->nameChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
         case 2: _t->zOffsetChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
+        case 3: _t->activated((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
         default: ;
         }
     }
@@ -96,6 +102,8 @@ void LayerItemWidget::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
         if (QtMocHelpers::indexOfMethod<void (LayerItemWidget::*)(int , const QString & )>(_a, &LayerItemWidget::nameChanged, 1))
             return;
         if (QtMocHelpers::indexOfMethod<void (LayerItemWidget::*)(int , float )>(_a, &LayerItemWidget::zOffsetChanged, 2))
+            return;
+        if (QtMocHelpers::indexOfMethod<void (LayerItemWidget::*)(int )>(_a, &LayerItemWidget::activated, 3))
             return;
     }
 }
@@ -119,14 +127,14 @@ int LayerItemWidget::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 3)
+        if (_id < 4)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 3;
+        _id -= 4;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 3)
+        if (_id < 4)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 3;
+        _id -= 4;
     }
     return _id;
 }
@@ -147,5 +155,11 @@ void LayerItemWidget::nameChanged(int _t1, const QString & _t2)
 void LayerItemWidget::zOffsetChanged(int _t1, float _t2)
 {
     QMetaObject::activate<void>(this, &staticMetaObject, 2, nullptr, _t1, _t2);
+}
+
+// SIGNAL 3
+void LayerItemWidget::activated(int _t1)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 3, nullptr, _t1);
 }
 QT_WARNING_POP

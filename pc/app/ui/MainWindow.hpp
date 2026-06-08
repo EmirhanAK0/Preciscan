@@ -14,6 +14,7 @@ class ConnectingOverlay;
 class QComboBox;
 class VisualizerWidget;
 class ScanPanel;
+class QProgressDialog;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -28,6 +29,8 @@ public slots:
     void onStateChanged(AppState newState);
     void onMcuConnectionChanged(bool connected);
     void onLaserConnectionChanged(bool connected);
+    void onProcessingStarted(const QString& taskName);
+    void onProcessingFinished();
 
 private:
     void setupToolBar();
@@ -38,6 +41,7 @@ private:
 
     AppStateMachine* m_stateMachine;
     ScanController*  m_scanController;
+    QProgressDialog* m_progressDialog;
 
     // Toolbar butonlari
     QPushButton* m_mcuBtn;

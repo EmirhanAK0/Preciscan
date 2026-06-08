@@ -13,11 +13,11 @@ void scan_init(ScanEngine* eng) {
     eng->running          = false;
 }
 
-void scan_start(ScanEngine* eng) {
+void scan_start(ScanEngine* eng, bool cw) {
     laser_off(&eng->laser);
     eng->total_steps = 0;
     eng->step_accum  = 0.0f;
-    eng->direction   = CFG_ROT_DEFAULT_DIR;
+    eng->direction   = cw;
 
     stepper_set_dir(&eng->rot_motor, eng->direction);
     stepper_enable(&eng->rot_motor);
@@ -30,11 +30,8 @@ void scan_stop(ScanEngine* eng) {
     eng->running = false;
 }
 
-/// Adim sayisindan aciya donustur (0-360 araliginda)
 static float steps_to_deg(long steps) {
     float deg = steps * CFG_ROT_DEG_PER_STEP;
-    deg = fmod(deg, 360.0f);
-    if (deg < 0.0f) deg += 360.0f;
     return deg;
 }
 

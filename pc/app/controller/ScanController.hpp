@@ -8,9 +8,22 @@
 #include <QVector3D>
 #include <queue>
 #include <atomic>
+#include <QFutureWatcher>
+#include <QFuture>
+#include <QtConcurrent>
+#include <QMap>
 
 #include "../../io/serial_trigger_reader.h"
 #include "ScanProfileFrame.hpp"
+
+/// Bir tarama katmaninin nokta bulutu ve meta verileri
+struct ScanLayerData {
+    QString            name;
+    QVector<QVector3D> points;
+    QVector<QVector3D> originalPoints;
+    QVector<QVector<QVector3D>> history;
+    float              zOffsetMm = 0.0f;
+};
 
 /// Tarama tetik kaynağı
 enum class ScanTriggerMode {
@@ -47,8 +60,11 @@ public:
     float resolution() const { return m_resolution; }
     float rps() const { return m_rps; }
 
-    const QVector<QVector3D>& getLastCloud() const { return m_lastCloud; }
+    const QVector<QVector3D>& getLastCloud() const;
     void setLastCloud(const QVector<QVector3D>& cloud);
+
+    const QMap<int, ScanLayerData>& getLayers() const { return m_layers; }
+    int getActiveLayerId() const { return m_activeLayerId; }
 
     int laserProfileRate() const { return m_laserProfileRate; }
     int laserShutterUs() const { return m_laserShutterUs; }
@@ -83,7 +99,7 @@ public slots:
     void connectMcuSerial();
     void disconnectMcuSerial();
 
-    void startScan();
+    void startScan(int direction = 0); // 0: CW, 1: CCW
     void stopScan();
     void saveCurrentScan(const QString& path);
 
@@ -91,6 +107,17 @@ public slots:
     void sendZMove(float mm);
     void sendZHome();
     void sendLinHome();
+    
+    void mergeWithICPAsync(const QVector<QVector3D>& target, const QVector<QVector3D>& source, bool isInverse);
+    void mergeSelectedLayers(const QVector<int>& layerIds, const QString& mode);
+    void generateMeshAsync();
+    void clearMesh();
+
+    void setActiveLayer(int id);
+    void deleteLayer(int id);
+    void setLayerName(int id, const QString& name);
+    void setLayerZOffset(int id, float mm);
+    void addNewLayer(const QVector<QVector3D>& points, const QString& name = QString());
 
 signals:
     void mcuConnectionChanged(bool connected);
@@ -99,6 +126,9 @@ signals:
     void scanStarted();
     void scanStopped();
     void simProgressUpdated(int percent);
+    void icpMergeFinished(const QVector<QVector3D>& mergedCloud);
+    void processingStarted(const QString& taskName);
+    void processingFinished();
     void requestClearVisualizer();
     void mcuPacketReceived(quint32 seq, float y_mm);
     void simProfileReceived(float theta_deg, const QVector<QPointF>& profile);
@@ -108,12 +138,15 @@ signals:
     void logMessage(const QString& level, const QString& msg);
     void triggerModeChanged(ScanTriggerMode mode);
     void historySizeChanged(int size);
+    void activeLayerChanged(int id);
+    void layersUpdated();
 
 public slots:
     void applyFilterCylindrical(float radiusMm, float minZ, float maxZ);
     void applyFilterStatistical(int meanK, float stdDevThresh);
     void applyFilterRadius(float radiusMm, int minNeighbors);
     void applyFilterVoxelGrid(float leafSizeMm);
+    void clearHistory();
 
     void applyManualDeletion(const QVector<int>& indicesToRemove);
     void undoLastFilter();
@@ -121,6 +154,10 @@ public slots:
 
 private slots:
     void consumeHardwarePackets();
+    void onMeshFinished();
+    void onFilterFinished();
+    void onIcpFinished();
+
 
 private:
     void rebuildSimWorkerIfPossible();
@@ -163,4 +200,16 @@ private:
     std::atomic<bool> m_mcuConnected{false};
     std::atomic<bool> m_laserConnected{false};
     std::atomic<bool> m_scanning{false};
+
+    QFutureWatcher<QVector<QVector3D>> m_watcher;
+    bool m_meshGenerating = false;
+    
+    QFutureWatcher<QVector<QVector3D>> m_icpWatcher;
+    bool m_icpRunning = false;
+    
+    QString m_currentTaskName;
+    
+    QMap<int, ScanLayerData> m_layers;
+    int m_nextLayerId{0};
+    int m_activeLayerId{-1};
 };

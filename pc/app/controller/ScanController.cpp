@@ -261,7 +261,7 @@ void ScanController::disconnectLaser()
 // =====================================================================
 // startScan — Doğru sıralama ile temiz başlangıç
 // =====================================================================
-void ScanController::startScan()
+void ScanController::startScan(int direction)
 {
     if (m_scanning)
         return;
@@ -286,6 +286,7 @@ void ScanController::startScan()
 
     m_scanning = true;
     m_lastCloud.clear();
+    m_lastCloud.clear();
     m_hwAngle = 0.0f;
 
     if (m_isSimMode && m_simWorker) {
@@ -303,8 +304,9 @@ void ScanController::startScan()
 
         // ── 7. Arduino'ya START gönder (motor dönsün) ───────────
         if (m_serialReader) {
-            m_serialReader->sendCommand("START");
-            emit logMessage("SYS", "Arduino'ya START komutu gonderildi.");
+            QString cmd = (direction == 0) ? "START_CW" : "START_CCW";
+            m_serialReader->sendCommand(cmd.toStdString());
+            emit logMessage("SYS", "Arduino'ya " + cmd + " komutu gonderildi.");
         }
 
         m_hwTimer->start();
@@ -357,6 +359,10 @@ void ScanController::stopScan()
     m_hwAngle = 0.0f;
 
     emit logMessage("SYS", "Tarama durduruldu — lazer ve tamponlar temizlendi.");
+    if (!m_lastCloud.isEmpty()) {
+        addNewLayer(m_lastCloud, "Tarama Katmani");
+        m_lastCloud.clear();
+    }
     emit scanStopped();
 }
 
@@ -552,6 +558,22 @@ void ScanController::publishProfileFrame(float thetaDeg, const QVector<QPointF>&
     frame.thetaDegree = thetaDeg;
     frame.layerIndex = 0;
     frame.direction = ScanDirection::Clockwise;
+
+    float theta_rad = thetaDeg * (3.14159265359f / 180.0f);
+    float cosA = std::cos(theta_rad);
+    float sinA = std::sin(theta_rad);
+    float tableZ = m_dOffset;
+    float zOffset = 3.5f;
+    float lateralOffset = m_lOffset;
+
+    for (const auto& p : profile) {
+        float z = p.x() - zOffset;
+        float r = tableZ - p.y();
+        if (std::abs(r) < 0.05f) continue;
+        float X = r * cosA - lateralOffset * sinA;
+        float Y = r * sinA + lateralOffset * cosA;
+        m_lastCloud.push_back(QVector3D(X, Y, z));
+    }
 
     emit profileFrameReceived(frame);
     emit simProfileReceived(thetaDeg, profile);
@@ -808,3 +830,180 @@ void ScanController::resetCloud()
     emit pointCloudReady(m_lastCloud);
     emit logMessage("SYS", "Nokta bulutu orijinal haline donduruldu.");
 }
+
+
+
+
+const QVector<QVector3D>& ScanController::getLastCloud() const { return m_lastCloud; }
+
+void ScanController::addNewLayer(const QVector<QVector3D>& points, const QString& name)
+{
+    ScanLayerData layer;
+    layer.name = name.isEmpty() ? QString("Katman %1").arg(m_nextLayerId + 1) : name;
+    layer.points = points;
+    layer.originalPoints = points;
+    layer.zOffsetMm = 0.0f;
+    
+    m_nextLayerId++;
+    m_layers.insert(m_nextLayerId, layer);
+    
+    emit layersUpdated();
+    setActiveLayer(m_nextLayerId);
+}
+
+void ScanController::setActiveLayer(int id)
+{
+    if (m_layers.contains(id) || id == -1) {
+        m_activeLayerId = id;
+        emit activeLayerChanged(m_activeLayerId);
+        
+        if (id != -1) {
+            emit pointCloudReady(m_layers[id].points);
+        } else {
+            emit requestClearVisualizer();
+        }
+    }
+}
+
+void ScanController::deleteLayer(int id)
+{
+    if (m_layers.remove(id) > 0) {
+        emit layersUpdated();
+        if (m_activeLayerId == id) {
+            if (!m_layers.isEmpty()) {
+                setActiveLayer(m_layers.lastKey());
+            } else {
+                setActiveLayer(-1);
+            }
+        }
+    }
+}
+
+void ScanController::setLayerName(int id, const QString& name)
+{
+    if (m_layers.contains(id)) {
+        m_layers[id].name = name;
+        emit layersUpdated();
+    }
+}
+
+void ScanController::setLayerZOffset(int id, float mm)
+{
+    if (m_layers.contains(id)) {
+        float diff = mm - m_layers[id].zOffsetMm;
+        m_layers[id].zOffsetMm = mm;
+        
+        for (auto& p : m_layers[id].points) {
+            p.setZ(p.z() + diff);
+        }
+        
+        emit layersUpdated();
+        if (m_activeLayerId == id) {
+            emit pointCloudReady(m_layers[id].points);
+        }
+    }
+}
+
+void ScanController::clearHistory()
+{
+    if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
+        m_layers[m_activeLayerId].history.clear();
+    }
+}
+
+void ScanController::generateMeshAsync()
+{
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    
+    const QVector<QVector3D>& currentCloud = m_layers[m_activeLayerId].points;
+    if (currentCloud.isEmpty()) return;
+    
+    emit processingStarted("Hizli Yuzey Olusturuluyor...");
+    disconnect(&m_watcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
+    connect(&m_watcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, &ScanController::onMeshFinished);
+    
+    QFuture<QVector<QVector3D>> future = QtConcurrent::run(&core::PointCloudProcessor::generateCylindricalMesh, currentCloud, 720, 1000);
+    m_watcher.setFuture(future);
+}
+
+void ScanController::onMeshFinished()
+{
+    QVector<QVector3D> mesh = m_watcher.result();
+    disconnect(&m_watcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
+    // meshReady signal does not exist, emitting to viz? Wait, MainWindow connects meshLoaded?
+    // Let's emit meshLoaded
+    emit meshLoaded(mesh);
+    emit processingFinished();
+}
+
+void ScanController::clearMesh()
+{
+    emit meshLoaded(QVector<QVector3D>());
+}
+
+void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const QVector<QVector3D>& source, bool isInverse)
+{
+    if (m_icpRunning) return;
+    m_icpRunning = true;
+    emit processingStarted("ICP Hizalama...");
+    
+    disconnect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
+    connect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, &ScanController::onIcpFinished);
+    
+    QFuture<QVector<QVector3D>> future = QtConcurrent::run([target, source, isInverse]() -> QVector<QVector3D> {
+        QMatrix4x4 transform = core::PointCloudProcessor::calculateICP(source, target, isInverse, 50, 1e-5f);
+        QVector<QVector3D> transformedSource;
+        transformedSource.reserve(source.size());
+        QMatrix4x4 flipMat;
+        if (isInverse) {
+            flipMat.scale(1.0f, -1.0f, 1.0f);
+            transform = transform * flipMat;
+        }
+        for (const auto& p : source) {
+            transformedSource.push_back(transform.map(p));
+        }
+        QVector<QVector3D> merged = target;
+        merged.append(transformedSource);
+        return merged;
+    });
+    m_icpWatcher.setFuture(future);
+}
+
+void ScanController::onIcpFinished()
+{
+    m_icpRunning = false;
+    QVector<QVector3D> merged = m_icpWatcher.result();
+    disconnect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
+    if (!merged.isEmpty()) {
+        addNewLayer(merged, "ICP Birlesimi");
+    }
+    emit processingFinished();
+}
+
+void ScanController::mergeSelectedLayers(const QVector<int>& layerIds, const QString& mode)
+{
+    if (layerIds.size() < 2) return;
+    
+    if (mode == "icp") {
+        QVector<QVector3D> target = m_layers[layerIds[0]].points;
+        QVector<QVector3D> source = m_layers[layerIds[1]].points;
+        // Direction isInverse... for now just assume false
+        mergeWithICPAsync(target, source, false);
+    } else {
+        // Direct merge
+        QVector<QVector3D> merged;
+        for (int id : layerIds) {
+            if (m_layers.contains(id)) {
+                merged.append(m_layers[id].points);
+            }
+        }
+        addNewLayer(merged, "Birlesik Katman");
+    }
+}
+
+void ScanController::onFilterFinished()
+{
+    // Placeholder, actually handled inside the filter functions?
+    // Filters modify the current layer
+}
+

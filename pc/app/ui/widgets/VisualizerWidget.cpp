@@ -1,5 +1,7 @@
 #include "VisualizerWidget.hpp"
 
+#include <QFile>
+#include <QTextStream>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QPushButton>
@@ -325,7 +327,8 @@ void VisualizerWidget::drawMesh()
     // Transparent Surface
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glBegin(GL_TRIANGLES);
-    glColor4f(0.5f, 0.5f, 0.5f, 0.15f); // Saydam dolgu
+    // Mesh rengini belirgin yapalım
+    glColor4f(0.8f, 0.8f, 0.8f, 0.95f); // Daha belirgin, opak bir renk
     for (const auto& v : m_meshTriangles)
     {
         glVertex3f(v.x(), v.y(), v.z());
@@ -336,6 +339,10 @@ void VisualizerWidget::drawMesh()
 void VisualizerWidget::drawPoints()
 {
     if (m_points.isEmpty())
+        return;
+
+    // Eger mesh olusturulmussa nokta bulutunu cizmeyelim ki mesh net gorunsun
+    if (!m_meshTriangles.isEmpty())
         return;
 
     glPointSize(2.0f);
@@ -500,4 +507,28 @@ void VisualizerWidget::wheelEvent(QWheelEvent* event)
     float step = std::max(5.0f, std::abs(m_zoom) * 0.15f);
     m_zoom += delta * step;
     update();
+}
+
+bool VisualizerWidget::saveMeshToOBJ(const QString& filePath) const
+{
+    if (m_meshTriangles.isEmpty()) return false;
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return false;
+
+    QTextStream out(&file);
+    out << "# Preciscan Generated Mesh\n";
+
+    for (const auto& v : m_meshTriangles) {
+        out << "v " << v.x() << " " << v.y() << " " << v.z() << "\n";
+    }
+
+    int numTriangles = m_meshTriangles.size() / 3;
+    for (int i = 0; i < numTriangles; ++i) {
+        out << "f " << (i * 3 + 1) << " " << (i * 3 + 2) << " " << (i * 3 + 3) << "\n";
+    }
+
+    file.close();
+    return true;
 }

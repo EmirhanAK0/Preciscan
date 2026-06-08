@@ -50,7 +50,12 @@ template <> constexpr inline auto ProcessPanel::qt_create_metaobjectdata<qt_meta
         "onEnableManualSelection",
         "state",
         "onUndo",
-        "onReset"
+        "onReset",
+        "onGenerateMesh",
+        "onSaveMesh",
+        "onClearMesh",
+        "onLoadPLY",
+        "onExportPLY"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -76,6 +81,16 @@ template <> constexpr inline auto ProcessPanel::qt_create_metaobjectdata<qt_meta
         QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onReset'
         QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onGenerateMesh'
+        QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onSaveMesh'
+        QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onClearMesh'
+        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onLoadPLY'
+        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onExportPLY'
+        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -108,6 +123,11 @@ void ProcessPanel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id
         case 6: _t->onEnableManualSelection((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
         case 7: _t->onUndo(); break;
         case 8: _t->onReset(); break;
+        case 9: _t->onGenerateMesh(); break;
+        case 10: _t->onSaveMesh(); break;
+        case 11: _t->onClearMesh(); break;
+        case 12: _t->onLoadPLY(); break;
+        case 13: _t->onExportPLY(); break;
         default: ;
         }
     }
@@ -132,14 +152,14 @@ int ProcessPanel::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 9)
+        if (_id < 14)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 9;
+        _id -= 14;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 9)
+        if (_id < 14)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 9;
+        _id -= 14;
     }
     return _id;
 }

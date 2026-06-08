@@ -150,35 +150,254 @@ QVector<QVector3D> PointCloudProcessor::transformCloud(const QVector<QVector3D>&
     return result;
 }
 
-QMatrix4x4 PointCloudProcessor::calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, int maxIterations, float tolerance) {
-    // Basic placeholder implementation. For production, Eigen library SVD is highly recommended.
-    // We start with Identity.
+
+QMatrix4x4 PointCloudProcessor::calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, bool isInverse, int maxIterations, float tolerance) {
     QMatrix4x4 currentTransform;
     currentTransform.setToIdentity();
     
     if (source.isEmpty() || target.isEmpty()) return currentTransform;
 
-    PointCloudAdapter targetAdapter(target);
+    // 1. Seyreltme (Subsampling) - 2mm voxel ile
+    QVector<QVector3D> subSource = filterVoxelGrid(source, 2.0f);
+    QVector<QVector3D> subTarget = filterVoxelGrid(target, 2.0f);
+
+    if (subSource.size() < 10 || subTarget.size() < 10) {
+        // Cok az nokta varsa orijinali kullanalim (kk veri)
+        subSource = source;
+        subTarget = target;
+    }
+
+    // 2. Initial Transform (Ters Tarama / CCW -> CW)
+    // isInverse true ise Y ekseni ayna goruntusu yapilir
+    if (isInverse) {
+        for (auto& p : subSource) {
+            p.setY(-p.y());
+        }
+        QMatrix4x4 flipMat;
+        flipMat.scale(1.0f, -1.0f, 1.0f);
+        currentTransform = flipMat * currentTransform;
+    }
+
+    PointCloudAdapter targetAdapter(subTarget);
     PointCloudKDTree tree(3, targetAdapter, nanoflann::KDTreeSingleIndexAdaptorParams(10));
     tree.buildIndex();
 
-    QVector<QVector3D> currentSource = source;
-
+    QVector<QVector3D> currentSource = subSource;
     float prevError = std::numeric_limits<float>::max();
 
     for (int iter = 0; iter < maxIterations; ++iter) {
-        QVector3D sourceCentroid(0, 0, 0);
-        QVector3D targetCentroid(0, 0, 0);
-        int validPairs = 0;
-        float errorSum = 0.0f;
+        QVector<QVector3D> matchedSource;
+        QVector<QVector3D> matchedTarget;
 
-        // In a real ICP we match points, find centroids, calculate cross-covariance,
-        // and compute SVD to find the rotation. Since we don't have Eigen, we just return Identity.
-        // We will notify the user in UI that ICP requires Eigen/PCL.
-        break;
+        float errorSum = 0.0f;
+        
+        // Eslestirme
+        for (const auto& p : currentSource) {
+            size_t ret_index;
+            float out_dist_sqr;
+            nanoflann::KNNResultSet<float> resultSet(1);
+            resultSet.init(&ret_index, &out_dist_sqr);
+            
+            float query_pt[3] = {p.x(), p.y(), p.z()};
+            tree.findNeighbors(resultSet, &query_pt[0], nanoflann::SearchParameters(10));
+            
+            if (out_dist_sqr < 25.0f) { // Maks 5mm uzakliktakiler (25 = 5^2)
+                matchedSource.push_back(p);
+                matchedTarget.push_back(subTarget[ret_index]);
+                errorSum += out_dist_sqr;
+            }
+        }
+
+        int N = matchedSource.size();
+        if (N < 10) break; // Eslenen nokta cok az, ICP calismaz
+
+        float meanError = errorSum / N;
+        if (std::abs(prevError - meanError) < tolerance) {
+            break; // Tolerans altina indik, dur
+        }
+        prevError = meanError;
+
+        // Centroids
+        QVector3D centroidSrc(0,0,0), centroidTgt(0,0,0);
+        for (int i=0; i<N; ++i) {
+            centroidSrc += matchedSource[i];
+            centroidTgt += matchedTarget[i];
+        }
+        centroidSrc /= N;
+        centroidTgt /= N;
+
+        // Cross-covariance matrix
+        float Sxx = 0, Sxy = 0, Sxz = 0;
+        float Syx = 0, Syy = 0, Syz = 0;
+        float Szx = 0, Szy = 0, Szz = 0;
+
+        for (int i=0; i<N; ++i) {
+            QVector3D p = matchedSource[i] - centroidSrc;
+            QVector3D q = matchedTarget[i] - centroidTgt;
+            Sxx += p.x()*q.x(); Sxy += p.x()*q.y(); Sxz += p.x()*q.z();
+            Syx += p.y()*q.x(); Syy += p.y()*q.y(); Syz += p.y()*q.z();
+            Szx += p.z()*q.x(); Szy += p.z()*q.y(); Szz += p.z()*q.z();
+        }
+
+        // 4x4 Symmetric Matrix N for Horn's Method
+        float N11 = Sxx + Syy + Szz;
+        float N12 = Syz - Szy;
+        float N13 = Szx - Sxz;
+        float N14 = Sxy - Syx;
+
+        float N22 = Sxx - Syy - Szz;
+        float N23 = Sxy + Syx;
+        float N24 = Szx + Sxz;
+
+        float N33 = -Sxx + Syy - Szz;
+        float N34 = Syz + Szy;
+
+        float N44 = -Sxx - Syy + Szz;
+
+        float N_mat[4][4] = {
+            {N11, N12, N13, N14},
+            {N12, N22, N23, N24},
+            {N13, N23, N33, N34},
+            {N14, N24, N34, N44}
+        };
+
+        // Power Iteration to find principal eigenvector (quaternion)
+        float q[4] = {1, 0, 0, 0};
+        for (int pi = 0; pi < 30; ++pi) {
+            float q_new[4] = {0,0,0,0};
+            for (int i=0; i<4; ++i) {
+                for (int j=0; j<4; ++j) {
+                    q_new[i] += N_mat[i][j] * q[j];
+                }
+            }
+            float norm = std::sqrt(q_new[0]*q_new[0] + q_new[1]*q_new[1] + q_new[2]*q_new[2] + q_new[3]*q_new[3]);
+            if (norm < 1e-8f) break;
+            q[0] = q_new[0]/norm; q[1] = q_new[1]/norm; q[2] = q_new[2]/norm; q[3] = q_new[3]/norm;
+        }
+
+        // Convert quaternion to Rotation Matrix
+        QQuaternion rot(q[0], q[1], q[2], q[3]);
+        QMatrix4x4 rotMat;
+        rotMat.rotate(rot);
+
+        // Translate
+        QVector3D trans = centroidTgt - rotMat.map(centroidSrc);
+
+        QMatrix4x4 stepTransform;
+        stepTransform.translate(trans);
+        stepTransform *= rotMat;
+
+        // Apply to currentSource and accumulate transform
+        for (auto& p : currentSource) {
+            p = stepTransform.map(p);
+        }
+        currentTransform = stepTransform * currentTransform;
     }
 
     return currentTransform;
 }
 
+
+QVector<QVector3D> PointCloudProcessor::generateCylindricalMesh(const QVector<QVector3D>& input, int angleSteps, int zSteps) {
+    if (input.isEmpty()) return QVector<QVector3D>();
+
+    float minZ = std::numeric_limits<float>::max();
+    float maxZ = std::numeric_limits<float>::lowest();
+    for (const auto& p : input) {
+        if (p.z() < minZ) minZ = p.z();
+        if (p.z() > maxZ) maxZ = p.z();
+    }
+    if (maxZ == minZ) maxZ += 1.0f; 
+
+    std::vector<std::vector<float>> grid(zSteps, std::vector<float>(angleSteps, -1.0f));
+
+    for (const auto& p : input) {
+        float r = std::sqrt(p.x() * p.x() + p.y() * p.y());
+        float theta = std::atan2(p.y(), p.x()); 
+        if (theta < 0) theta += 2.0f * 3.14159265359f; 
+
+        int zIdx = static_cast<int>((p.z() - minZ) / (maxZ - minZ) * (zSteps - 1));
+        int aIdx = static_cast<int>((theta) / (2.0f * 3.14159265359f) * (angleSteps - 1));
+
+        if (grid[zIdx][aIdx] < r) {
+            grid[zIdx][aIdx] = r;
+        }
+    }
+
+    for (int z = 0; z < zSteps; ++z) {
+        for (int a = 0; a < angleSteps; ++a) {
+            if (grid[z][a] < 0.0f) {
+                int left = a - 1;
+                while (left >= 0 && grid[z][left] < 0.0f) left--;
+                int right = a + 1;
+                while (right < angleSteps && grid[z][right] < 0.0f) right++;
+
+                if (left >= 0 && right < angleSteps) {
+                    float t = static_cast<float>(a - left) / (right - left);
+                    grid[z][a] = grid[z][left] + t * (grid[z][right] - grid[z][left]);
+                } else if (left >= 0) {
+                    grid[z][a] = grid[z][left];
+                } else if (right < angleSteps) {
+                    grid[z][a] = grid[z][right];
+                }
+            }
+        }
+    }
+
+    // Vertical fill
+    for (int a = 0; a < angleSteps; ++a) {
+        for (int z = 0; z < zSteps; ++z) {
+            if (grid[z][a] < 0.0f) {
+                int up = z - 1;
+                while (up >= 0 && grid[up][a] < 0.0f) up--;
+                int down = z + 1;
+                while (down < zSteps && grid[down][a] < 0.0f) down++;
+
+                if (up >= 0 && down < zSteps) {
+                    float t = static_cast<float>(z - up) / (down - up);
+                    grid[z][a] = grid[up][a] + t * (grid[down][a] - grid[up][a]);
+                } else if (up >= 0) {
+                    grid[z][a] = grid[up][a];
+                } else if (down < zSteps) {
+                    grid[z][a] = grid[down][a];
+                }
+            }
+        }
+    }
+
+
+    QVector<QVector3D> triangles;
+    triangles.reserve(zSteps * angleSteps * 6);
+
+    auto getCartesian = [&](int zIdx, int aIdx) -> QVector3D {
+        float r = grid[zIdx][aIdx];
+        if (r < 0.0f) r = 0.0f; 
+        float theta = static_cast<float>(aIdx) / (angleSteps - 1) * (2.0f * 3.14159265359f);
+        float z = minZ + static_cast<float>(zIdx) / (zSteps - 1) * (maxZ - minZ);
+        return QVector3D(r * std::cos(theta), r * std::sin(theta), z);
+    };
+
+    for (int z = 0; z < zSteps - 1; ++z) {
+        for (int a = 0; a < angleSteps - 1; ++a) {
+            if (grid[z][a] < 0.0f || grid[z+1][a] < 0.0f || grid[z][a+1] < 0.0f || grid[z+1][a+1] < 0.0f)
+                continue;
+
+            QVector3D p1 = getCartesian(z, a);
+            QVector3D p2 = getCartesian(z + 1, a);
+            QVector3D p3 = getCartesian(z, a + 1);
+            QVector3D p4 = getCartesian(z + 1, a + 1);
+
+            triangles.push_back(p1);
+            triangles.push_back(p2);
+            triangles.push_back(p3);
+            triangles.push_back(p3);
+            triangles.push_back(p2);
+            triangles.push_back(p4);
+        }
+    }
+
+    return triangles;
+}
+
 } // namespace core
+

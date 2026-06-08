@@ -8,7 +8,6 @@
 
 #include "../../../../app/ui/panels/ScanPanel.hpp"
 #include <QtCore/qmetatype.h>
-#include <QtCore/QList>
 
 #include <QtCore/qtmochelpers.h>
 
@@ -40,17 +39,12 @@ template <> constexpr inline auto ScanPanel::qt_create_metaobjectdata<qt_meta_ta
     namespace QMC = QtMocConstants;
     QtMocHelpers::StringRefStorage qt_stringData {
         "ScanPanel",
-        "mergedCloudReady",
-        "",
-        "QList<QVector3D>",
-        "cloud",
         "onScanStarted",
+        "",
         "onScanStopped",
         "onMcuConnected",
         "ok",
         "onLaserConnected",
-        "addLayer",
-        "points",
         "appendLog",
         "level",
         "msg",
@@ -64,43 +58,35 @@ template <> constexpr inline auto ScanPanel::qt_create_metaobjectdata<qt_meta_ta
     };
 
     QtMocHelpers::UintData qt_methods {
-        // Signal 'mergedCloudReady'
-        QtMocHelpers::SignalData<void(const QVector<QVector3D> &)>(1, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 3, 4 },
-        }}),
         // Slot 'onScanStarted'
-        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'onScanStopped'
-        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'onMcuConnected'
-        QtMocHelpers::SlotData<void(bool)>(7, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 8 },
+        QtMocHelpers::SlotData<void(bool)>(4, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Bool, 5 },
         }}),
         // Slot 'onLaserConnected'
-        QtMocHelpers::SlotData<void(bool)>(9, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 8 },
-        }}),
-        // Slot 'addLayer'
-        QtMocHelpers::SlotData<void(const QVector<QVector3D> &)>(10, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 3, 11 },
+        QtMocHelpers::SlotData<void(bool)>(6, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Bool, 5 },
         }}),
         // Slot 'appendLog'
-        QtMocHelpers::SlotData<void(const QString &, const QString &)>(12, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 13 }, { QMetaType::QString, 14 },
+        QtMocHelpers::SlotData<void(const QString &, const QString &)>(7, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::QString, 8 }, { QMetaType::QString, 9 },
         }}),
         // Slot 'onStartClicked'
-        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(10, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onStopClicked'
-        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onMergeClicked'
-        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onDeleteLayer'
-        QtMocHelpers::SlotData<void(int)>(18, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 19 },
+        QtMocHelpers::SlotData<void(int)>(13, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 14 },
         }}),
         // Slot 'onLayerZOffsetChanged'
-        QtMocHelpers::SlotData<void(int, float)>(20, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 19 }, { QMetaType::Float, 21 },
+        QtMocHelpers::SlotData<void(int, float)>(15, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 14 }, { QMetaType::Float, 16 },
         }}),
     };
     QtMocHelpers::UintData qt_properties {
@@ -125,24 +111,18 @@ void ScanPanel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, v
     auto *_t = static_cast<ScanPanel *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
-        case 0: _t->mergedCloudReady((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1]))); break;
-        case 1: _t->onScanStarted(); break;
-        case 2: _t->onScanStopped(); break;
-        case 3: _t->onMcuConnected((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
-        case 4: _t->onLaserConnected((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
-        case 5: _t->addLayer((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1]))); break;
-        case 6: _t->appendLog((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
-        case 7: _t->onStartClicked(); break;
-        case 8: _t->onStopClicked(); break;
-        case 9: _t->onMergeClicked(); break;
-        case 10: _t->onDeleteLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 11: _t->onLayerZOffsetChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
+        case 0: _t->onScanStarted(); break;
+        case 1: _t->onScanStopped(); break;
+        case 2: _t->onMcuConnected((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
+        case 3: _t->onLaserConnected((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
+        case 4: _t->appendLog((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
+        case 5: _t->onStartClicked(); break;
+        case 6: _t->onStopClicked(); break;
+        case 7: _t->onMergeClicked(); break;
+        case 8: _t->onDeleteLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 9: _t->onLayerZOffsetChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
         default: ;
         }
-    }
-    if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (ScanPanel::*)(const QVector<QVector3D> & )>(_a, &ScanPanel::mergedCloudReady, 0))
-            return;
     }
 }
 
@@ -165,21 +145,15 @@ int ScanPanel::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 12)
+        if (_id < 10)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 12;
+        _id -= 10;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 12)
+        if (_id < 10)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 12;
+        _id -= 10;
     }
     return _id;
-}
-
-// SIGNAL 0
-void ScanPanel::mergedCloudReady(const QVector<QVector3D> & _t1)
-{
-    QMetaObject::activate<void>(this, &staticMetaObject, 0, nullptr, _t1);
 }
 QT_WARNING_POP

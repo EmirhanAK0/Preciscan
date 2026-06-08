@@ -91,3 +91,19 @@ void LayerItemWidget::setZOffset(float mm)
 {
     m_zOffsetSpin->setValue(static_cast<double>(mm));
 }
+
+void LayerItemWidget::setActive(bool active)
+{
+    m_isActive = active;
+    if (m_isActive) {
+        setStyleSheet("LayerItemWidget { background-color: #2e4c2e; border-radius: 4px; margin-bottom: 2px; border: 1px solid #2ecc71; }");
+    } else {
+        setStyleSheet("LayerItemWidget { background-color: #2d2d30; border-radius: 4px; margin-bottom: 2px; border: none; }");
+    }
+}
+
+void LayerItemWidget::mousePressEvent(QMouseEvent* event)
+{
+    QWidget::mousePressEvent(event);
+    emit activated(m_layerId);
+}

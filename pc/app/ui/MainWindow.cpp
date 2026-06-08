@@ -12,6 +12,7 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QProgressDialog>
 
 #include "../../io/ply_writer.h"
 
@@ -37,6 +38,7 @@ MainWindow::MainWindow(McuListener* mcu, LaserManager* laser, SPSCRingBuffer* ri
 {
     m_stateMachine   = new AppStateMachine(this);
     m_scanController = new ScanController(mcu, laser, ring, this);
+    m_progressDialog = nullptr;
 
     setWindowTitle("Preciscan");
     resize(1200, 750);
@@ -51,6 +53,8 @@ MainWindow::MainWindow(McuListener* mcu, LaserManager* laser, SPSCRingBuffer* ri
     connect(m_stateMachine, &AppStateMachine::stateChanged, this, &MainWindow::onStateChanged);
     connect(m_scanController, &ScanController::scanStarted, this,
             [this] { m_stateMachine->setState(AppState::Scanning); });
+    connect(m_scanController, &ScanController::processingStarted, this, &MainWindow::onProcessingStarted);
+    connect(m_scanController, &ScanController::processingFinished, this, &MainWindow::onProcessingFinished);
     connect(m_scanController, &ScanController::scanStopped, this,
             [this] {
                 m_stateMachine->setState(AppState::Idle);
@@ -220,12 +224,7 @@ void MainWindow::setupCentralWidget()
                 }
             });
 
-    // Katman birlestirme sonucu -> 3D Visualizer
-    connect(scanPanel, &ScanPanel::mergedCloudReady, this,
-            [this, viz](const QVector<QVector3D>& cloud) {
-                viz->clearPoints();
-                viz->addPoints(cloud);
-            });
+
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->addWidget(leftSplitter);
@@ -310,4 +309,23 @@ void MainWindow::onLaserConnectionChanged(bool connected)
     }
 }
 
+void MainWindow::onProcessingStarted(const QString& taskName)
+{
+    if (!m_progressDialog) {
+        m_progressDialog = new QProgressDialog(this);
+        m_progressDialog->setWindowModality(Qt::WindowModal);
+        m_progressDialog->setCancelButton(nullptr); // No cancel
+        m_progressDialog->setMinimum(0);
+        m_progressDialog->setMaximum(0); // Indeterminate
+        m_progressDialog->setMinimumDuration(0); // Show immediately
+    }
+    m_progressDialog->setLabelText(taskName);
+    m_progressDialog->show();
+}
 
+void MainWindow::onProcessingFinished()
+{
+    if (m_progressDialog) {
+        m_progressDialog->hide();
+    }
+}

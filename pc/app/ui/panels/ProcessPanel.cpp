@@ -10,6 +10,17 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QCheckBox>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QFrame>
+#include "../../../io/ply_writer.h"
+
+static QFrame* makeSep(QWidget* p) {
+    QFrame* f = new QFrame(p);
+    f->setFrameShape(QFrame::HLine);
+    f->setFrameShadow(QFrame::Sunken);
+    return f;
+}
 
 ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QWidget* parent)
     : QWidget(parent), m_controller(controller), m_viz(viz)
@@ -117,6 +128,29 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     lManual->addWidget(m_btnDeleteSelected);
     mainLayout->addWidget(gbManual);
 
+    // Mesh Generation
+    QGroupBox* gbMesh = new QGroupBox("Yuzey Olusturma (Mesh)", this);
+    QVBoxLayout* lMesh = new QVBoxLayout(gbMesh);
+
+    m_btnGenerateMesh = new QPushButton("Hizli Yuzey (Mesh) Olustur", this);
+    lMesh->addWidget(m_btnGenerateMesh);
+
+    m_btnSaveMesh = new QPushButton("Yuzeyi Kaydet (.obj)", this);
+    lMesh->addWidget(m_btnSaveMesh);
+
+    m_btnClearMesh = new QPushButton("Yuzeyi Temizle", this);
+    lMesh->addWidget(m_btnClearMesh);
+
+    lMesh->addWidget(makeSep(this));
+
+    m_btnLoadPLY = new QPushButton("PLY Yukle", this);
+    lMesh->addWidget(m_btnLoadPLY);
+
+    m_btnExportPLY = new QPushButton("Aktif (Filtreli) Noktalari Kaydet (.ply)", this);
+    lMesh->addWidget(m_btnExportPLY);
+    
+    mainLayout->addWidget(gbMesh);
+
     // History Control
     QGroupBox* gbHistory = new QGroupBox("Gecmis", this);
     QVBoxLayout* lHistory = new QVBoxLayout(gbHistory);
@@ -139,6 +173,12 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     connect(m_btnAutoFilter, &QPushButton::clicked, this, &ProcessPanel::onApplyCylindricalFilter);
     connect(m_chkManualSelect, &QCheckBox::stateChanged, this, &ProcessPanel::onEnableManualSelection);
     connect(m_btnDeleteSelected, &QPushButton::clicked, this, &ProcessPanel::onDeleteSelected);
+    connect(m_btnGenerateMesh, &QPushButton::clicked, this, &ProcessPanel::onGenerateMesh);
+    connect(m_btnSaveMesh, &QPushButton::clicked, this, &ProcessPanel::onSaveMesh);
+    connect(m_btnClearMesh, &QPushButton::clicked, this, &ProcessPanel::onClearMesh);
+    connect(m_btnLoadPLY, &QPushButton::clicked, this, &ProcessPanel::onLoadPLY);
+    connect(m_btnExportPLY, &QPushButton::clicked, this, &ProcessPanel::onExportPLY);
+
     connect(m_btnUndo, &QPushButton::clicked, this, &ProcessPanel::onUndo);
     connect(m_btnReset, &QPushButton::clicked, this, &ProcessPanel::onReset);
 
@@ -147,10 +187,6 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
 
 void ProcessPanel::onApplyCylindricalFilter()
 {
-    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
-        m_controller->setLastCloud(m_viz->getPoints());
-    }
-
     float r = m_radiusSpin->value();
     float minZ = m_minZSpin->value();
     float maxZ = m_maxZSpin->value();
@@ -159,25 +195,16 @@ void ProcessPanel::onApplyCylindricalFilter()
 
 void ProcessPanel::onApplySORFilter()
 {
-    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
-        m_controller->setLastCloud(m_viz->getPoints());
-    }
     m_controller->applyFilterStatistical(m_sorNeighborsSpin->value(), m_sorStdDevSpin->value());
 }
 
 void ProcessPanel::onApplyRORFilter()
 {
-    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
-        m_controller->setLastCloud(m_viz->getPoints());
-    }
     m_controller->applyFilterRadius(m_rorRadiusSpin->value(), m_rorMinPtsSpin->value());
 }
 
 void ProcessPanel::onApplyVoxelGridFilter()
 {
-    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
-        m_controller->setLastCloud(m_viz->getPoints());
-    }
     m_controller->applyFilterVoxelGrid(m_voxelLeafSpin->value());
 }
 
@@ -190,10 +217,6 @@ void ProcessPanel::onEnableManualSelection(int state)
 
 void ProcessPanel::onDeleteSelected()
 {
-    if (m_controller->getLastCloud().isEmpty() && m_viz->pointCount() > 0) {
-        m_controller->setLastCloud(m_viz->getPoints());
-    }
-
     QVector<int> selected = m_viz->getSelectedPointIndices();
     if (!selected.isEmpty()) {
         m_controller->applyManualDeletion(selected);
@@ -215,4 +238,60 @@ void ProcessPanel::onHistorySizeChanged(int size)
 {
     m_btnUndo->setEnabled(size > 0);
     m_btnReset->setEnabled(size > 0);
+}
+
+void ProcessPanel::onGenerateMesh()
+{
+    m_controller->generateMeshAsync();
+}
+
+void ProcessPanel::onClearMesh()
+{
+    m_controller->clearMesh();
+}
+
+
+void ProcessPanel::onSaveMesh()
+{
+    QString fileName = QFileDialog::getSaveFileName(this, "Mesh Kaydet", "", "OBJ Dosyalari (*.obj)");
+    if (fileName.isEmpty()) return;
+
+    if (m_viz->saveMeshToOBJ(fileName)) {
+        QMessageBox::information(this, "Basarili", "Mesh basariyla kaydedildi.");
+    } else {
+        QMessageBox::critical(this, "Hata", "Mesh kaydedilemedi! Lutfen once mesh olusturun.");
+    }
+}
+
+
+void ProcessPanel::onLoadPLY()
+{
+    QString fileName = QFileDialog::getOpenFileName(this, "PLY Yukle", "", "PLY Dosyalari (*.ply)");
+    if (fileName.isEmpty()) return;
+
+    QVector<QVector3D> points;
+    if (io::readPLY(fileName, points)) {
+        m_controller->addNewLayer(points, QFileInfo(fileName).baseName());
+        QMessageBox::information(this, "Basarili", QString("%1 nokta yuklendi.").arg(points.size()));
+    } else {
+        QMessageBox::critical(this, "Hata", "PLY dosyasi okunamadi!");
+    }
+}
+
+void ProcessPanel::onExportPLY()
+{
+    const QVector<QVector3D>& points = m_viz->getPoints();
+    if (points.isEmpty()) {
+        QMessageBox::warning(this, "Uyari", "Disa aktarilacak nokta yok!");
+        return;
+    }
+
+    QString fileName = QFileDialog::getSaveFileName(this, "Filtreli PLY Kaydet", "", "PLY Dosyalari (*.ply)");
+    if (fileName.isEmpty()) return;
+
+    if (io::writePLY(fileName, points)) {
+        QMessageBox::information(this, "Basarili", QString("%1 nokta basariyla kaydedildi.").arg(points.size()));
+    } else {
+        QMessageBox::critical(this, "Hata", "Dosya kaydedilirken hata olustu!");
+    }
 }

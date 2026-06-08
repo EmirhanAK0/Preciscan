@@ -19,7 +19,7 @@ struct ScanEngine {
 };
 
 void scan_init(ScanEngine* eng);
-void scan_start(ScanEngine* eng);
+void scan_start(ScanEngine* eng, bool cw);
 void scan_stop(ScanEngine* eng);
 
 /// Her loop() iterasyonunda cagirilir.

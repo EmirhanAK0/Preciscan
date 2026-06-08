@@ -15,12 +15,7 @@ class QComboBox;
 class LayerItemWidget;
 class QDoubleSpinBox;
 
-/// Bir tarama katmaninin nokta bulutu ve meta verileri
-struct ScanLayerData {
-    QString            name;
-    QVector<QVector3D> points;
-    float              zOffsetMm = 0.0f;
-};
+#include "../controller/ScanController.hpp"
 
 class ScanPanel : public QWidget {
     Q_OBJECT
@@ -34,15 +29,8 @@ public slots:
     void onMcuConnected(bool ok);
     void onLaserConnected(bool ok);
 
-    /// Tarama durduğunda VisualizerWidget'tan noktalar buraya verilir
-    void addLayer(const QVector<QVector3D>& points);
-
     // Dis kaynaklardan log itmek icin
     void appendLog(const QString& level, const QString& msg);
-
-signals:
-    /// Birlestirilmis nokta bulutu hazir — MainWindow 3D'de gosterir
-    void mergedCloudReady(const QVector<QVector3D>& cloud);
 
 private slots:
     void onStartClicked();
@@ -50,6 +38,9 @@ private slots:
     void onMergeClicked();
     void onDeleteLayer(int layerId);
     void onLayerZOffsetChanged(int layerId, float mm);
+
+public:
+    void addLayer(const QVector<QVector3D>& points);
 
 private:
     void updateStartButtonState();
@@ -70,6 +61,7 @@ private:
     // Kontrol
     QLabel*      m_scanStatusLabel;
     QPushButton* m_startBtn;
+    class QComboBox* m_scanDirCombo;
     QPushButton* m_stopBtn;
 
     // Katmanlar
@@ -78,10 +70,6 @@ private:
     QPushButton* m_mergeBtn;
     QPushButton* m_exportPlyBtn;  // PLY Disa Aktar
     QComboBox*   m_mergeMode;
-
-    // Katman veri deposu
-    QMap<int, ScanLayerData> m_layers;    ///< layerId -> veri
-    int m_nextLayerId = 0;
 
     // Z-ekseni kontrol
     QDoubleSpinBox* m_zMoveSpin;

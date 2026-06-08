@@ -61,7 +61,7 @@ target_link_libraries(trigger_test PRIVATE preciscan_hw)
 target_compile_options(trigger_test PRIVATE /W4 /utf-8)
 
 # --- Qt UI (Qt6 kurulu olmali: C:/Qt/6.x.x/msvc2022_64) ---
-find_package(Qt6 QUIET COMPONENTS Widgets OpenGLWidgets)
+find_package(Qt6 QUIET COMPONENTS Widgets OpenGLWidgets Concurrent)
 if(Qt6_FOUND)
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTOUIC ON)
@@ -95,7 +95,7 @@ if(Qt6_FOUND)
     )
     target_include_directories(preciscan_ui PRIVATE app/ app/ui/ io/ sim/)
     target_link_libraries(preciscan_ui PRIVATE
-        Qt6::Widgets Qt6::OpenGLWidgets
+        Qt6::Widgets Qt6::OpenGLWidgets Qt6::Concurrent
         OpenGL::GL
         preciscan_net preciscan_hw
     )

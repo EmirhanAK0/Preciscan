@@ -54,6 +54,8 @@ template <> constexpr inline auto VisualizerWidget::qt_create_metaobjectdata<qt_
         "lateralOffset",
         "setMesh",
         "triangles",
+        "saveMeshToOBJ",
+        "filePath",
         "setTopView",
         "setFrontView",
         "setLeftView"
@@ -87,12 +89,16 @@ template <> constexpr inline auto VisualizerWidget::qt_create_metaobjectdata<qt_
         QtMocHelpers::SlotData<void(const QVector<QVector3D> &)>(13, 2, QMC::AccessPublic, QMetaType::Void, {{
             { 0x80000000 | 4, 14 },
         }}),
+        // Slot 'saveMeshToOBJ'
+        QtMocHelpers::SlotData<bool(const QString &) const>(15, 2, QMC::AccessPublic, QMetaType::Bool, {{
+            { QMetaType::QString, 16 },
+        }}),
         // Slot 'setTopView'
-        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'setFrontView'
-        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'setLeftView'
         QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'setFrontView'
+        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'setLeftView'
+        QtMocHelpers::SlotData<void()>(19, 2, QMC::AccessPublic, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -123,9 +129,11 @@ void VisualizerWidget::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
         case 4: _t->addProfile((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QList<QPointF>>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3]))); break;
         case 5: _t->addProfile((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QList<QPointF>>>(_a[2]))); break;
         case 6: _t->setMesh((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1]))); break;
-        case 7: _t->setTopView(); break;
-        case 8: _t->setFrontView(); break;
-        case 9: _t->setLeftView(); break;
+        case 7: { bool _r = _t->saveMeshToOBJ((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1])));
+            if (_a[0]) *reinterpret_cast<bool*>(_a[0]) = std::move(_r); }  break;
+        case 8: _t->setTopView(); break;
+        case 9: _t->setFrontView(); break;
+        case 10: _t->setLeftView(); break;
         default: ;
         }
     }
@@ -152,14 +160,14 @@ int VisualizerWidget::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 10)
+        if (_id < 11)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 10;
+        _id -= 11;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 10)
+        if (_id < 11)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 10;
+        _id -= 11;
     }
     return _id;
 }
