@@ -165,8 +165,8 @@ bool SerialTriggerReader::configurePort()
     dcb.Parity   = NOPARITY;
     dcb.StopBits = ONESTOPBIT;
     dcb.fBinary  = TRUE;
-    dcb.fDtrControl = DTR_CONTROL_ENABLE;
-    dcb.fRtsControl = RTS_CONTROL_ENABLE;
+    dcb.fDtrControl = DTR_CONTROL_DISABLE;
+    dcb.fRtsControl = RTS_CONTROL_DISABLE;
 
     if (!SetCommState(h, &dcb))
     {
