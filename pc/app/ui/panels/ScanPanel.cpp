@@ -18,9 +18,11 @@
 #include <QTextEdit>
 #include <QMessageBox>
 #include <QVBoxLayout>
+#include <QMenu>
 
 #include "../../controller/ScanController.hpp"
 #include "../../io/ply_writer.h"
+#include "../widgets/ManualAlignDialog.hpp"
 
 static QFrame* makeSep(QWidget* p)
 {
@@ -148,7 +150,13 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     auto* mergeRow = new QHBoxLayout;
     m_mergeMode    = new QComboBox(this);
-    m_mergeMode->addItems({"Birlestir (Z-Offset)", "ICP ile Birlestir (Duz)", "ICP ile Birlestir (Ters Tarama)"});
+    m_mergeMode->addItems({
+        "Birlestir (Z-Offset)", 
+        "ICP ile Birlestir (Duz)", 
+        "ICP ile Birlestir (Ters / Bas Asagi)",
+        "ICP ile Birlestir (Yan / X+90)",
+        "ICP ile Birlestir (Yan / X-90)"
+    });
     m_mergeMode->setStyleSheet("background:#1a1a1a;color:#ccc;border:1px solid "
                                "#333;border-radius:3px;padding:2px;font-size:10px;");
     m_mergeBtn = new QPushButton("Birlestir", this);
@@ -376,6 +384,8 @@ void ScanPanel::rebuildLayerListUI()
                 this, &ScanPanel::onDeleteLayer);
         connect(widget, &LayerItemWidget::zOffsetChanged,
                 this, &ScanPanel::onLayerZOffsetChanged);
+        connect(widget, &LayerItemWidget::alignRequested,
+                this, &ScanPanel::onAlignRequested);
         connect(widget, &LayerItemWidget::nameChanged,
                 this, [this](int lid, const QString& newName) {
                     if (m_ctrl)
@@ -481,4 +491,13 @@ void ScanPanel::appendLog(const QString& level, const QString& msg)
     m_logView->append(
         QString("<span style='color:#555'>[%1]</span> <span style='color:%2'>[%3]</span> %4")
             .arg(ts, color, level, msg));
+}
+
+void ScanPanel::onAlignRequested(int layerId)
+{
+    if (!m_ctrl) return;
+    m_ctrl->setActiveLayer(layerId);
+
+    ManualAlignDialog dlg(m_ctrl, this);
+    dlg.exec();
 }

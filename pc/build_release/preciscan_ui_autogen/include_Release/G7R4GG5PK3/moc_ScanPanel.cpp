@@ -54,7 +54,8 @@ template <> constexpr inline auto ScanPanel::qt_create_metaobjectdata<qt_meta_ta
         "onDeleteLayer",
         "layerId",
         "onLayerZOffsetChanged",
-        "mm"
+        "mm",
+        "onAlignRequested"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -87,6 +88,10 @@ template <> constexpr inline auto ScanPanel::qt_create_metaobjectdata<qt_meta_ta
         // Slot 'onLayerZOffsetChanged'
         QtMocHelpers::SlotData<void(int, float)>(15, 2, QMC::AccessPrivate, QMetaType::Void, {{
             { QMetaType::Int, 14 }, { QMetaType::Float, 16 },
+        }}),
+        // Slot 'onAlignRequested'
+        QtMocHelpers::SlotData<void(int)>(17, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 14 },
         }}),
     };
     QtMocHelpers::UintData qt_properties {
@@ -121,6 +126,7 @@ void ScanPanel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, v
         case 7: _t->onMergeClicked(); break;
         case 8: _t->onDeleteLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
         case 9: _t->onLayerZOffsetChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
+        case 10: _t->onAlignRequested((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
         default: ;
         }
     }
@@ -145,14 +151,14 @@ int ScanPanel::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 10)
+        if (_id < 11)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 10;
+        _id -= 11;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 10)
+        if (_id < 11)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 10;
+        _id -= 11;
     }
     return _id;
 }

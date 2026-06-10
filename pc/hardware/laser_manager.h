@@ -105,6 +105,7 @@ private:
 
     bool m_connected = false;
     bool m_acquiring = false;
+    bool m_deviceCreated = false;
 
     unsigned int m_resolution  = 0;
     TScannerType m_scannerType = StandardType;

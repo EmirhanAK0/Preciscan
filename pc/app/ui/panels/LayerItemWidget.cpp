@@ -58,10 +58,20 @@ LayerItemWidget::LayerItemWidget(int layerId, const QString& name,
     btnDelete->setFixedSize(20, 20);
     btnDelete->setCursor(Qt::PointingHandCursor);
     btnDelete->setStyleSheet(
-        "QPushButton{background:transparent;color:#a55;font-size:12px;font-weight:bold;}"
-        "QPushButton:hover{background:#3e3e42;color:#f66;}");
+        "QPushButton{background:#600;color:#fdd;border:none;border-radius:2px;font-size:10px;font-weight:bold;}"
+        "QPushButton:hover{background:#900;}");
     connect(btnDelete, &QPushButton::clicked, this,
             [this]() { emit deleteRequested(m_layerId); });
+
+    // Hizala butonu
+    auto* btnAlign = new QPushButton("Hizala", this);
+    btnAlign->setFixedSize(40, 20);
+    btnAlign->setCursor(Qt::PointingHandCursor);
+    btnAlign->setStyleSheet(
+        "QPushButton{background:#3a3a3a;color:#ccc;border:1px solid #555;border-radius:2px;font-size:9px;}"
+        "QPushButton:hover{background:#4a4a4a;color:#fff;}");
+    connect(btnAlign, &QPushButton::clicked, this,
+            [this]() { emit alignRequested(m_layerId); });
 
     layout->addWidget(m_check);
     layout->addWidget(m_nameEdit);
@@ -69,6 +79,7 @@ LayerItemWidget::LayerItemWidget(int layerId, const QString& name,
     layout->addStretch();
     layout->addWidget(zLabel);
     layout->addWidget(m_zOffsetSpin);
+    layout->addWidget(btnAlign);
     layout->addWidget(btnDelete);
 }
 

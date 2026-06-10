@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "hal_encoder.h"
 
 // ---- Dahili ileri bildirimler ----
 static void process_command(AppController* app, const char* cmd);
@@ -28,6 +29,8 @@ void app_init(AppController* app) {
     // Tarama motoru
     scan_init(&app->scanner);
 
+    encoder_init();
+
     app->state      = SYS_READY;
     memset(app->serial_buf, 0, sizeof(app->serial_buf));
     app->z_move_mm  = 0.0f;
@@ -37,6 +40,25 @@ void app_init(AppController* app) {
 // Ana guncelleme dongusu
 // ==================================================================
 void app_update(AppController* app, uint32_t now_ms, uint32_t now_us) {
+    // Encoder'i surekli (her loopta) okumak I2C yuzunden donguyu yaklasik 300-400 mikrosaniye yavaslatir.
+    // Bu da hizli donmesi gereken lineer motorun (200us step) yavaslamasina veya titremesine yol acar.
+    // O yuzden tarama disindayken sadece 20ms'de bir okuyoruz (elle dondurme takibi icin yeterli).
+    // Tarama sirasinda asiri hizli I2C okuyup AS5600'u kilitmekten (hammering) kacınmak icin 5ms'de bir okuyoruz.
+    // 5ms = Saniyede 200 okuma. Motor 50ms'de bir adim atiyor (0.1 derece), dolayisiyla 5ms cozunurluk fazlasiyla yeterlidir.
+    if (app->state == SYS_SCANNING) {
+        static uint32_t last_enc_us = 0;
+        if (now_us - last_enc_us >= 5000) { 
+            last_enc_us = now_us;
+            encoder_update();
+        }
+    } else if (app->state == SYS_READY) {
+        static uint32_t last_enc_ms = 0;
+        if (now_ms - last_enc_ms >= 50) { // Bosta dururken 50ms'de bir guncellemek fazlasiyla yeterli
+            last_enc_ms = now_ms;
+            encoder_update();
+        }
+    }
+
     // ---- 1. Seri komut okuma ----
     if (uart_comm_read_line(app->serial_buf, sizeof(app->serial_buf))) {
         if (strlen(app->serial_buf) > 0) {
@@ -62,6 +84,13 @@ void app_update(AppController* app, uint32_t now_ms, uint32_t now_us) {
         float angle;
         if (scan_update(&app->scanner, now_us, &angle)) {
             uart_comm_print_float("", angle, 2); // Aciyi PC'ye gonder
+        }
+        
+        // 360 derece donup otomatik durduysa:
+        if (!app->scanner.running) {
+            app->state = SYS_READY;
+            uart_comm_println("STATUS:SCAN_COMPLETE");
+            uart_comm_println("STATUS:READY");
         }
     }
 
@@ -155,6 +184,7 @@ static void enter_fault(AppController* app, const char* msg) {
 static void start_lin_homing(AppController* app) {
     axis_stop(&app->z_axis);
     scan_stop(&app->scanner);
+    encoder_reset(); // Sistemin global sifirlanmasi
     app->state = SYS_LIN_HOMING;
     uart_comm_println("STATUS:LIN_HOMING");
     axis_start_homing(&app->lin_axis);

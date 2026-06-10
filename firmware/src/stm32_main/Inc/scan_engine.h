@@ -10,10 +10,10 @@ typedef struct {
     StepperDriver rot_motor;
     LaserTrigger  laser;
 
-    float step_accum;            // Tetik icin adim biriktirici
-    float steps_per_trigger;     // Kac adimda bir lazer tetikle
-    long  total_steps;           // Toplam atilan adim (yonlu)
-    bool  direction;             // true = CW
+    float scan_start_angle;      // Tarama baslangicindaki mutlak aci (360 derece durmasi icin)
+    float next_trigger_angle;    // Bir sonraki lazer tetik acisi
+    float angle_per_trigger;     // Derece cinsinden tetik periyodu
+    bool  direction;             // true = CW, false = CCW
     bool  running;
 } ScanEngine;
 

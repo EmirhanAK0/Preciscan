@@ -125,7 +125,7 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "mergeWithICPAsync",
         "target",
         "source",
-        "isInverse",
+        "icpMode",
         "mergeSelectedLayers",
         "QList<int>",
         "layerIds",
@@ -153,6 +153,16 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "indicesToRemove",
         "undoLastFilter",
         "resetCloud",
+        "beginManualAlignment",
+        "updateManualAlignment",
+        "tx",
+        "ty",
+        "tz",
+        "rx",
+        "ry",
+        "rz",
+        "commitManualAlignment",
+        "cancelManualAlignment",
         "consumeHardwarePackets",
         "onMeshFinished",
         "onFilterFinished",
@@ -319,8 +329,8 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         // Slot 'sendLinHome'
         QtMocHelpers::SlotData<void()>(82, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'mergeWithICPAsync'
-        QtMocHelpers::SlotData<void(const QVector<QVector3D> &, const QVector<QVector3D> &, bool)>(83, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 12, 84 }, { 0x80000000 | 12, 85 }, { QMetaType::Bool, 86 },
+        QtMocHelpers::SlotData<void(const QVector<QVector3D> &, const QVector<QVector3D> &, int)>(83, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 12, 84 }, { 0x80000000 | 12, 85 }, { QMetaType::Int, 86 },
         }}),
         // Slot 'mergeSelectedLayers'
         QtMocHelpers::SlotData<void(const QVector<int> &, const QString &)>(87, 2, QMC::AccessPublic, QMetaType::Void, {{
@@ -380,14 +390,25 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         QtMocHelpers::SlotData<void()>(112, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'resetCloud'
         QtMocHelpers::SlotData<void()>(113, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'beginManualAlignment'
+        QtMocHelpers::SlotData<void()>(114, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'updateManualAlignment'
+        QtMocHelpers::SlotData<void(float, float, float, float, float, float)>(115, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 116 }, { QMetaType::Float, 117 }, { QMetaType::Float, 118 }, { QMetaType::Float, 119 },
+            { QMetaType::Float, 120 }, { QMetaType::Float, 121 },
+        }}),
+        // Slot 'commitManualAlignment'
+        QtMocHelpers::SlotData<void()>(122, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'cancelManualAlignment'
+        QtMocHelpers::SlotData<void()>(123, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'consumeHardwarePackets'
-        QtMocHelpers::SlotData<void()>(114, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(124, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onMeshFinished'
-        QtMocHelpers::SlotData<void()>(115, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(125, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onFilterFinished'
-        QtMocHelpers::SlotData<void()>(116, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(126, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onIcpFinished'
-        QtMocHelpers::SlotData<void()>(117, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(127, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -459,7 +480,7 @@ void ScanController::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
         case 44: _t->sendZMove((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
         case 45: _t->sendZHome(); break;
         case 46: _t->sendLinHome(); break;
-        case 47: _t->mergeWithICPAsync((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<bool>>(_a[3]))); break;
+        case 47: _t->mergeWithICPAsync((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[3]))); break;
         case 48: _t->mergeSelectedLayers((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
         case 49: _t->generateMeshAsync(); break;
         case 50: _t->clearMesh(); break;
@@ -477,10 +498,14 @@ void ScanController::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
         case 62: _t->applyManualDeletion((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1]))); break;
         case 63: _t->undoLastFilter(); break;
         case 64: _t->resetCloud(); break;
-        case 65: _t->consumeHardwarePackets(); break;
-        case 66: _t->onMeshFinished(); break;
-        case 67: _t->onFilterFinished(); break;
-        case 68: _t->onIcpFinished(); break;
+        case 65: _t->beginManualAlignment(); break;
+        case 66: _t->updateManualAlignment((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[6]))); break;
+        case 67: _t->commitManualAlignment(); break;
+        case 68: _t->cancelManualAlignment(); break;
+        case 69: _t->consumeHardwarePackets(); break;
+        case 70: _t->onMeshFinished(); break;
+        case 71: _t->onFilterFinished(); break;
+        case 72: _t->onIcpFinished(); break;
         default: ;
         }
     }
@@ -566,14 +591,14 @@ int ScanController::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 69)
+        if (_id < 73)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 69;
+        _id -= 73;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 69)
+        if (_id < 73)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 69;
+        _id -= 73;
     }
     return _id;
 }

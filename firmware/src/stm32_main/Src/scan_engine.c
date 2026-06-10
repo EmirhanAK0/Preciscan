@@ -1,22 +1,27 @@
 #include "scan_engine.h"
+#include "hal_encoder.h"
 #include <math.h>
 
 void scan_init(ScanEngine* eng) {
     stepper_init(&eng->rot_motor, BSP_ROT_MOTOR, CFG_ROT_STEP_US);
     laser_init(&eng->laser, CFG_LASER_PULSE_US);
 
-    eng->step_accum        = 0.0f;
-    eng->steps_per_trigger = CFG_ROT_STEPS_PER_TRIG;
-    eng->total_steps       = 0;
+    eng->angle_per_trigger = CFG_TRIGGER_DEG;
     eng->direction         = CFG_ROT_DEFAULT_DIR;
     eng->running           = false;
 }
 
 void scan_start(ScanEngine* eng, bool cw) {
-    eng->running     = true;
-    eng->step_accum  = 0.0f;
-    eng->total_steps = 0;
-    eng->direction   = cw;
+    eng->running          = true;
+    eng->direction        = cw;
+    eng->scan_start_angle = encoder_get_angle();
+    
+    if (cw) {
+        eng->next_trigger_angle = eng->scan_start_angle + eng->angle_per_trigger;
+    } else {
+        eng->next_trigger_angle = eng->scan_start_angle - eng->angle_per_trigger;
+    }
+
     stepper_set_dir(&eng->rot_motor, eng->direction);
     stepper_enable(&eng->rot_motor);
 }
@@ -30,23 +35,44 @@ void scan_stop(ScanEngine* eng) {
 bool scan_update(ScanEngine* eng, uint32_t now_us, float* angle_out) {
     if (!eng->running) return false;
 
-    if (stepper_update(&eng->rot_motor, now_us)) {
-        if (eng->direction) eng->total_steps++;
-        else                eng->total_steps--;
+    stepper_update(&eng->rot_motor, now_us);
 
-        eng->step_accum += 1.0f;
+    float current_angle = encoder_get_angle();
 
-        if (eng->step_accum >= eng->steps_per_trigger) {
-            eng->step_accum -= eng->steps_per_trigger;
-            
-            laser_fire(&eng->laser);
+    static uint32_t last_dbg_us = 0;
+    if (now_us - last_dbg_us >= 500000) { // 500ms'de bir logla
+        last_dbg_us = now_us;
+        uart_comm_print_float("DEBUG_ANGLE:", current_angle, 2);
+    }
 
-            float a = (float)eng->total_steps * CFG_ROT_DEG_PER_STEP;
-            
-            if (angle_out) *angle_out = a;
-            return true;
+    // Otomatik olarak 360 dereceyi doldurdugunda taramayi durdur
+    if (fabs(current_angle - eng->scan_start_angle) >= 360.0f) {
+        // Aslinda app_controller'in state'ini de degistirmek gerekir, 
+        // ama scan_stop(eng) rotasyonu durduracaktir.
+        scan_stop(eng);
+        return false;
+    }
+
+    bool triggered = false;
+
+    if (eng->direction) {
+        if (current_angle >= eng->next_trigger_angle) {
+            eng->next_trigger_angle += eng->angle_per_trigger;
+            triggered = true;
+        }
+    } else {
+        if (current_angle <= eng->next_trigger_angle) {
+            eng->next_trigger_angle -= eng->angle_per_trigger;
+            triggered = true;
         }
     }
+
+    if (triggered) {
+        laser_fire(&eng->laser);
+        if (angle_out) *angle_out = current_angle;
+        return true;
+    }
+
     return false;
 }
 

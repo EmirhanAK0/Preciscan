@@ -38,6 +38,7 @@ signals:
     void nameChanged(int layerId, const QString& newName);
     void zOffsetChanged(int layerId, float mm);
     void activated(int layerId);
+    void alignRequested(int layerId);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;

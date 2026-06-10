@@ -38,6 +38,7 @@ private slots:
     void onMergeClicked();
     void onDeleteLayer(int layerId);
     void onLayerZOffsetChanged(int layerId, float mm);
+    void onAlignRequested(int layerId);
 
 public:
     void addLayer(const QVector<QVector3D>& points);

@@ -151,7 +151,7 @@ QVector<QVector3D> PointCloudProcessor::transformCloud(const QVector<QVector3D>&
 }
 
 
-QMatrix4x4 PointCloudProcessor::calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, bool isInverse, int maxIterations, float tolerance) {
+QMatrix4x4 PointCloudProcessor::calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, int icpMode, int maxIterations, float tolerance) {
     QMatrix4x4 currentTransform;
     currentTransform.setToIdentity();
     
@@ -167,15 +167,26 @@ QMatrix4x4 PointCloudProcessor::calculateICP(const QVector<QVector3D>& source, c
         subTarget = target;
     }
 
-    // 2. Initial Transform (Ters Tarama / CCW -> CW)
-    // isInverse true ise Y ekseni ayna goruntusu yapilir
-    if (isInverse) {
+    // 2. Initial Transform (Kaba Hizalama On Rotasyon)
+    QMatrix4x4 initialRot;
+    bool applyInitialRot = false;
+
+    if (icpMode == 1) { // Ters (180 derece X ekseninde, Y->-Y, Z->-Z)
+        initialRot.scale(1.0f, -1.0f, -1.0f);
+        applyInitialRot = true;
+    } else if (icpMode == 2) { // Yan X+90
+        initialRot.rotate(90.0f, 1.0f, 0.0f, 0.0f);
+        applyInitialRot = true;
+    } else if (icpMode == 3) { // Yan X-90
+        initialRot.rotate(-90.0f, 1.0f, 0.0f, 0.0f);
+        applyInitialRot = true;
+    }
+
+    if (applyInitialRot) {
         for (auto& p : subSource) {
-            p.setY(-p.y());
+            p = initialRot.map(p);
         }
-        QMatrix4x4 flipMat;
-        flipMat.scale(1.0f, -1.0f, 1.0f);
-        currentTransform = flipMat * currentTransform;
+        currentTransform = initialRot * currentTransform;
     }
 
     PointCloudAdapter targetAdapter(subTarget);

@@ -10,6 +10,7 @@
 #include <6BV5VGF5IY/moc_ConnectingOverlay.cpp>
 #include <6BV5VGF5IY/moc_ExposureControl.cpp>
 #include <6BV5VGF5IY/moc_InfoTipButton.cpp>
+#include <6BV5VGF5IY/moc_ManualAlignDialog.cpp>
 #include <6BV5VGF5IY/moc_ProfileWidget.cpp>
 #include <6BV5VGF5IY/moc_SpeedControl.cpp>
 #include <6BV5VGF5IY/moc_VisualizerWidget.cpp>

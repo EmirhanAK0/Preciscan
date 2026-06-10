@@ -187,12 +187,16 @@ bool LaserManager::connect()
     if (m_connected)
         return true;
 
-    int ret = m_llt->CreateLLTDevice(INTF_TYPE_ETHERNET);
-    std::cout << "[LAZER] CreateLLTDevice = " << ret << "\n";
-    if (ret < GENERAL_FUNCTION_OK)
+    if (!m_deviceCreated)
     {
-        m_lastError = "CreateLLTDevice basarisiz";
-        return false;
+        int ret = m_llt->CreateLLTDevice(INTF_TYPE_ETHERNET);
+        std::cout << "[LAZER] CreateLLTDevice = " << ret << "\n";
+        if (ret < GENERAL_FUNCTION_OK)
+        {
+            m_lastError = "CreateLLTDevice basarisiz";
+            return false;
+        }
+        m_deviceCreated = true;
     }
 
     unsigned int devList[6] = {};

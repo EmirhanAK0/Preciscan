@@ -108,7 +108,7 @@ public slots:
     void sendZHome();
     void sendLinHome();
     
-    void mergeWithICPAsync(const QVector<QVector3D>& target, const QVector<QVector3D>& source, bool isInverse);
+    void mergeWithICPAsync(const QVector<QVector3D>& target, const QVector<QVector3D>& source, int icpMode);
     void mergeSelectedLayers(const QVector<int>& layerIds, const QString& mode);
     void generateMeshAsync();
     void clearMesh();
@@ -152,6 +152,12 @@ public slots:
     void undoLastFilter();
     void resetCloud();
 
+    // Manuel Hizalama
+    void beginManualAlignment();
+    void updateManualAlignment(float tx, float ty, float tz, float rx, float ry, float rz);
+    void commitManualAlignment();
+    void cancelManualAlignment();
+
 private slots:
     void consumeHardwarePackets();
     void onMeshFinished();
@@ -187,6 +193,7 @@ private:
     QVector<QVector3D> m_originalCloud;
     QVector<QVector3D> m_lastCloud;
     QVector<QVector<QVector3D>> m_cloudHistory;
+    QVector<QVector3D> m_manualAlignBaseCloud;
 
     QTimer* m_hwTimer{nullptr};
     float m_hwAngle{0.0f};
@@ -196,6 +203,9 @@ private:
 
     QString m_serialPort{"COM3"};
     SerialTriggerReader* m_serialReader{nullptr};
+
+    bool m_hasStartAngle{false};
+    float m_startAngle{0.0f};
 
     std::atomic<bool> m_mcuConnected{false};
     std::atomic<bool> m_laserConnected{false};

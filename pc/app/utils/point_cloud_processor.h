@@ -49,7 +49,7 @@ public:
     static QVector<QVector3D> transformCloud(const QVector<QVector3D>& input, const QMatrix4x4& transform);
 
     // Hassas Hizalama (ICP - Iterative Closest Point)
-    static QMatrix4x4 calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, bool isInverse = false, int maxIterations = 50, float tolerance = 1e-5f);
+    static QMatrix4x4 calculateICP(const QVector<QVector3D>& source, const QVector<QVector3D>& target, int icpMode = 0, int maxIterations = 50, float tolerance = 1e-5f);
 };
 
 } // namespace core

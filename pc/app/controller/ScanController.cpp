@@ -286,8 +286,9 @@ void ScanController::startScan(int direction)
 
     m_scanning = true;
     m_lastCloud.clear();
-    m_lastCloud.clear();
     m_hwAngle = 0.0f;
+    m_hasStartAngle = false;
+    m_startAngle = 0.0f;
 
     if (m_isSimMode && m_simWorker) {
         m_simWorker->start();
@@ -408,11 +409,17 @@ void ScanController::consumeHardwarePackets()
                 ++evtCount;
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
-                emit logMessage("MCU", QString("Tetik: aci=%1 deg").arg(angleDeg, 0, 'f', 2));
+                
+                if (!m_hasStartAngle) {
+                    m_startAngle = angleDeg;
+                    m_hasStartAngle = true;
+                }
+                
                 m_encoderAngles.push(angleDeg);
 
-                // 360 derece tamamlandiysa durdur
-                if (angleDeg >= 359.5f || angleDeg <= -359.5f) {
+                // 360 derece (tam tur) tamamlandiysa durdur
+                float sweptAngle = std::abs(angleDeg - m_startAngle);
+                if (sweptAngle >= 359.5f) {
                     stopScan();
                     return;
                 }
@@ -431,7 +438,12 @@ void ScanController::consumeHardwarePackets()
         // Bu sayede her aci zamansal olarak en yakin profili alir.
         {
             const int numAngles = static_cast<int>(m_encoderAngles.size());
-            if (numAngles == 0) { return; }
+            if (numAngles == 0) { 
+                // Eger okunmayi bekleyen bir aci yoksa, lazerden gelen surekli profiller
+                // buffer'i doldurup tasirir. Bu nedenle buffer'i temizliyoruz.
+                m_ring->clear();
+                return; 
+            }
 
             // 1. Ring buffer'i tamamen bosalt, tum profilleri topla
             std::vector<Packet> allProfiles;
@@ -443,37 +455,44 @@ void ScanController::consumeHardwarePackets()
                 }
             }
 
-            const int profileCount = static_cast<int>(allProfiles.size());
+            // 2. Gecerli ve hatasiz profilleri ayikla ve donustur
+            std::vector<QVector<QPointF>> validProfiles;
+            validProfiles.reserve(allProfiles.size());
+            static std::vector<double> vX, vZ;
+            
+            for (auto& pkt : allProfiles) {
+                if (!pkt.data.empty() && m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ)) {
+                    const unsigned int res = m_laser->resolution();
+                    QVector<QPointF> profile;
+                    profile.reserve(static_cast<int>(res));
+                    for (unsigned int j = 0; j < res; ++j) {
+                        if (vX[j] == 0.0 && vZ[j] == 0.0) continue;
+                        profile.push_back(QPointF(vX[j], vZ[j]));
+                    }
+                    if (!profile.isEmpty()) {
+                        validProfiles.push_back(std::move(profile));
+                    }
+                }
+            }
+
+            const int profileCount = static_cast<int>(validProfiles.size());
             if (profileCount == 0) { return; }
 
-            // 2. Kac profili kullanacagimizi hesapla
+            // 3. Kac profili kullanacagimizi hesapla
             const int usable = (numAngles < profileCount) ? numAngles : profileCount;
             const int skip   = profileCount - usable;
 
-            // 3. Son 'usable' profili, ilk 'usable' aciya esle
-            static std::vector<double> vX, vZ;
+            // 4. Son 'usable' profili, ilk 'usable' aciya esle
             for (int i = 0; i < usable; ++i) {
-                Packet& pkt = allProfiles[skip + i];
+                const auto& profile = validProfiles[skip + i];
                 float angleDeg = m_encoderAngles.front();
                 m_encoderAngles.pop();
 
-                if (!pkt.data.empty()) {
-                    if (m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ)) {
-                        const unsigned int res = m_laser->resolution();
-                        QVector<QPointF> profile;
-                        profile.reserve(static_cast<int>(res));
-                        for (unsigned int j = 0; j < res; ++j) {
-                            if (vX[j] == 0.0 && vZ[j] == 0.0) continue;
-                            profile.push_back(QPointF(vX[j], vZ[j]));
-                        }
-                        if (!profile.isEmpty()) {
-                            publishProfileFrame(angleDeg, profile);
-                        }
-                    }
-                }
+                publishProfileFrame(angleDeg, profile);
 
                 // 360 derece kontrolu
-                if (angleDeg >= 359.5f || angleDeg <= -359.5f) {
+                float sweptAngle = std::abs(angleDeg - m_startAngle);
+                if (sweptAngle >= 359.5f) {
                     stopScan();
                     return;
                 }
@@ -731,103 +750,128 @@ void ScanController::setLastCloud(const QVector<QVector3D>& cloud)
 
 void ScanController::applyFilterCylindrical(float radiusMm, float minZ, float maxZ)
 {
-    if (m_lastCloud.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    if (layer.points.isEmpty()) return;
 
-    m_cloudHistory.push_back(m_lastCloud);
-    if (m_cloudHistory.size() > 5) {
-        m_cloudHistory.pop_front();
+    layer.history.push_back(layer.points);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
     }
-    emit historySizeChanged(m_cloudHistory.size());
+    emit historySizeChanged(layer.history.size());
 
-    m_lastCloud = core::PointCloudProcessor::filterCylindrical(m_lastCloud, radiusMm, minZ, maxZ);
-    emit pointCloudReady(m_lastCloud);
-    emit logMessage("SYS", QString("Silindir filtre uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+    layer.points = core::PointCloudProcessor::filterCylindrical(layer.points, radiusMm, minZ, maxZ);
+    emit pointCloudReady(layer.points);
+    emit logMessage("SYS", QString("Silindir filtre uygulandi. Kalan nokta: %1").arg(layer.points.size()));
 }
 
 void ScanController::applyFilterStatistical(int meanK, float stdDevThresh)
 {
-    if (m_lastCloud.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    if (layer.points.isEmpty()) return;
 
-    m_cloudHistory.push_back(m_lastCloud);
-    if (m_cloudHistory.size() > 5) {
-        m_cloudHistory.pop_front();
+    layer.history.push_back(layer.points);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
     }
-    emit historySizeChanged(m_cloudHistory.size());
+    emit historySizeChanged(layer.history.size());
 
-    m_lastCloud = core::PointCloudProcessor::filterStatisticalOutlier(m_lastCloud, meanK, stdDevThresh);
-    emit pointCloudReady(m_lastCloud);
-    emit logMessage("SYS", QString("SOR (Statistical) uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+    layer.points = core::PointCloudProcessor::filterStatisticalOutlier(layer.points, meanK, stdDevThresh);
+    emit pointCloudReady(layer.points);
+    emit logMessage("SYS", QString("SOR (Statistical) uygulandi. Kalan nokta: %1").arg(layer.points.size()));
 }
 
 void ScanController::applyFilterRadius(float radiusMm, int minNeighbors)
 {
-    if (m_lastCloud.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    if (layer.points.isEmpty()) return;
 
-    m_cloudHistory.push_back(m_lastCloud);
-    if (m_cloudHistory.size() > 5) {
-        m_cloudHistory.pop_front();
+    layer.history.push_back(layer.points);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
     }
-    emit historySizeChanged(m_cloudHistory.size());
+    emit historySizeChanged(layer.history.size());
 
-    m_lastCloud = core::PointCloudProcessor::filterRadiusOutlier(m_lastCloud, radiusMm, minNeighbors);
-    emit pointCloudReady(m_lastCloud);
-    emit logMessage("SYS", QString("ROR (Radius) uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+    layer.points = core::PointCloudProcessor::filterRadiusOutlier(layer.points, radiusMm, minNeighbors);
+    emit pointCloudReady(layer.points);
+    emit logMessage("SYS", QString("ROR (Radius) uygulandi. Kalan nokta: %1").arg(layer.points.size()));
 }
 
 void ScanController::applyFilterVoxelGrid(float leafSizeMm)
 {
-    if (m_lastCloud.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    if (layer.points.isEmpty()) return;
 
-    m_cloudHistory.push_back(m_lastCloud);
-    if (m_cloudHistory.size() > 5) {
-        m_cloudHistory.pop_front();
+    layer.history.push_back(layer.points);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
     }
-    emit historySizeChanged(m_cloudHistory.size());
+    emit historySizeChanged(layer.history.size());
 
-    m_lastCloud = core::PointCloudProcessor::filterVoxelGrid(m_lastCloud, leafSizeMm);
-    emit pointCloudReady(m_lastCloud);
-    emit logMessage("SYS", QString("Voxel Grid (%1 mm) uygulandi. Kalan nokta: %2").arg(leafSizeMm).arg(m_lastCloud.size()));
+    layer.points = core::PointCloudProcessor::filterVoxelGrid(layer.points, leafSizeMm);
+    emit pointCloudReady(layer.points);
+    emit logMessage("SYS", QString("Voxel Grid (%1 mm) uygulandi. Kalan nokta: %2").arg(leafSizeMm).arg(layer.points.size()));
 }
 
 void ScanController::applyManualDeletion(const QVector<int>& indicesToRemove)
 {
-    if (m_lastCloud.isEmpty() || indicesToRemove.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    if (layer.points.isEmpty() || indicesToRemove.isEmpty()) return;
 
-    m_cloudHistory.push_back(m_lastCloud);
-    if (m_cloudHistory.size() > 5) {
-        m_cloudHistory.pop_front();
+    layer.history.push_back(layer.points);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
     }
-    emit historySizeChanged(m_cloudHistory.size());
+    emit historySizeChanged(layer.history.size());
 
-    m_lastCloud = core::PointCloudProcessor::removePoints(m_lastCloud, indicesToRemove);
-    emit pointCloudReady(m_lastCloud);
-    emit logMessage("SYS", QString("Manuel silme uygulandi. Kalan nokta: %1").arg(m_lastCloud.size()));
+    // Noktalari tersten silmek (index kaymasini önlemek icin)
+    QVector<int> sortedIndices = indicesToRemove;
+    std::sort(sortedIndices.begin(), sortedIndices.end(), std::greater<int>());
+
+    for (int idx : sortedIndices) {
+        if (idx >= 0 && idx < layer.points.size()) {
+            layer.points.remove(idx);
+        }
+    }
+
+    emit pointCloudReady(layer.points);
+    emit logMessage("SYS", QString("%1 nokta manuel olarak silindi.").arg(indicesToRemove.size()));
 }
 
 void ScanController::undoLastFilter()
 {
-    if (m_cloudHistory.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    
+    if (layer.history.isEmpty()) return;
 
-    m_lastCloud = m_cloudHistory.last();
-    m_cloudHistory.pop_back();
-    emit historySizeChanged(m_cloudHistory.size());
+    layer.points = layer.history.last();
+    layer.history.pop_back();
+    emit historySizeChanged(layer.history.size());
 
-    emit pointCloudReady(m_lastCloud);
+    emit pointCloudReady(layer.points);
     emit logMessage("SYS", "Geri al (Undo) islemi yapildi.");
 }
 
 void ScanController::resetCloud()
 {
-    if (m_originalCloud.isEmpty()) return;
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
 
-    m_cloudHistory.push_back(m_lastCloud);
-    if (m_cloudHistory.size() > 5) {
-        m_cloudHistory.pop_front();
+    if (layer.originalPoints.isEmpty()) return;
+
+    layer.history.push_back(layer.points);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
     }
-    emit historySizeChanged(m_cloudHistory.size());
+    emit historySizeChanged(layer.history.size());
 
-    m_lastCloud = m_originalCloud;
-    emit pointCloudReady(m_lastCloud);
+    layer.points = layer.originalPoints;
+    emit pointCloudReady(layer.points);
     emit logMessage("SYS", "Nokta bulutu orijinal haline donduruldu.");
 }
 
@@ -941,7 +985,7 @@ void ScanController::clearMesh()
     emit meshLoaded(QVector<QVector3D>());
 }
 
-void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const QVector<QVector3D>& source, bool isInverse)
+void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const QVector<QVector3D>& source, int icpMode)
 {
     if (m_icpRunning) return;
     m_icpRunning = true;
@@ -950,15 +994,20 @@ void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const Q
     disconnect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
     connect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, &ScanController::onIcpFinished);
     
-    QFuture<QVector<QVector3D>> future = QtConcurrent::run([target, source, isInverse]() -> QVector<QVector3D> {
-        QMatrix4x4 transform = core::PointCloudProcessor::calculateICP(source, target, isInverse, 50, 1e-5f);
+    QFuture<QVector<QVector3D>> future = QtConcurrent::run([target, source, icpMode]() -> QVector<QVector3D> {
+        QMatrix4x4 transform = core::PointCloudProcessor::calculateICP(source, target, icpMode, 50, 1e-5f);
         QVector<QVector3D> transformedSource;
         transformedSource.reserve(source.size());
-        QMatrix4x4 flipMat;
-        if (isInverse) {
-            flipMat.scale(1.0f, -1.0f, 1.0f);
-            transform = transform * flipMat;
+        
+        QMatrix4x4 initialRot;
+        if (icpMode == 1) {
+            initialRot.scale(1.0f, -1.0f, -1.0f);
+        } else if (icpMode == 2) {
+            initialRot.rotate(90.0f, 1.0f, 0.0f, 0.0f);
+        } else if (icpMode == 3) {
+            initialRot.rotate(-90.0f, 1.0f, 0.0f, 0.0f);
         }
+        transform = transform * initialRot;
         for (const auto& p : source) {
             transformedSource.push_back(transform.map(p));
         }
@@ -984,11 +1033,15 @@ void ScanController::mergeSelectedLayers(const QVector<int>& layerIds, const QSt
 {
     if (layerIds.size() < 2) return;
     
-    if (mode == "icp") {
+    if (mode.contains("ICP", Qt::CaseInsensitive)) {
+        int icpMode = 0;
+        if (mode.contains("Ters", Qt::CaseInsensitive)) icpMode = 1;
+        else if (mode.contains("X+90", Qt::CaseInsensitive)) icpMode = 2;
+        else if (mode.contains("X-90", Qt::CaseInsensitive)) icpMode = 3;
+
         QVector<QVector3D> target = m_layers[layerIds[0]].points;
         QVector<QVector3D> source = m_layers[layerIds[1]].points;
-        // Direction isInverse... for now just assume false
-        mergeWithICPAsync(target, source, false);
+        mergeWithICPAsync(target, source, icpMode);
     } else {
         // Direct merge
         QVector<QVector3D> merged;
@@ -1005,5 +1058,61 @@ void ScanController::onFilterFinished()
 {
     // Placeholder, actually handled inside the filter functions?
     // Filters modify the current layer
+}
+
+void ScanController::beginManualAlignment()
+{
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    m_manualAlignBaseCloud = layer.points; // Yedekle
+}
+
+void ScanController::updateManualAlignment(float tx, float ty, float tz, float rx, float ry, float rz)
+{
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    if (m_manualAlignBaseCloud.isEmpty()) return;
+
+    QMatrix4x4 transform;
+    transform.translate(tx, ty, tz);
+    transform.rotate(rx, 1, 0, 0);
+    transform.rotate(ry, 0, 1, 0);
+    transform.rotate(rz, 0, 0, 1);
+
+    auto& layer = m_layers[m_activeLayerId];
+    layer.points.clear();
+    layer.points.reserve(m_manualAlignBaseCloud.size());
+    for (const auto& p : m_manualAlignBaseCloud) {
+        layer.points.push_back(transform.map(p));
+    }
+    emit pointCloudReady(layer.points);
+}
+
+void ScanController::commitManualAlignment()
+{
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    
+    // Gecmise ekle
+    layer.history.push_back(m_manualAlignBaseCloud);
+    if (layer.history.size() > 5) {
+        layer.history.pop_front();
+    }
+    emit historySizeChanged(layer.history.size());
+    
+    m_manualAlignBaseCloud.clear();
+    emit logMessage("SYS", "Manuel hizalama kaydedildi.");
+}
+
+void ScanController::cancelManualAlignment()
+{
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId)) return;
+    auto& layer = m_layers[m_activeLayerId];
+    
+    // Geri al
+    if (!m_manualAlignBaseCloud.isEmpty()) {
+        layer.points = m_manualAlignBaseCloud;
+        emit pointCloudReady(layer.points);
+    }
+    m_manualAlignBaseCloud.clear();
 }
 
