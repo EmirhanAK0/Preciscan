@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 // RT Callback — SDK kendi thread'inden cagiriyor.
 // KURAL: Heap alloc, mutex, I/O yapma! Sadece memcpy.
@@ -200,7 +202,18 @@ bool LaserManager::connect()
     }
 
     unsigned int devList[6] = {};
-    int nFound = m_llt->GetDeviceInterfaces(devList, 6);
+    int nFound = 0;
+    
+    // Cihaz agda hemen bulunamayabilir (broadcast yanit suresi), bu yuzden Configuration Tools 
+    // gibi birkac kez tekrar denememiz gerekiyor.
+    for (int retry = 0; retry < 5; ++retry)
+    {
+        nFound = m_llt->GetDeviceInterfaces(devList, 6);
+        if (nFound >= 1)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    }
+    
     std::cout << "[LAZER] GetDeviceInterfaces = " << nFound << " cihaz\n";
     if (nFound < 1)
     {
