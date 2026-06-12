@@ -68,6 +68,7 @@ public:
 
     float dOffset() const { return m_dOffset; }
     float lateralOffset() const { return m_lOffset; }
+    float zBaseOffset() const { return m_zBaseOffset; }
     float as5600Resolution() const { return m_as5600Resolution; }
     float stepResolution() const { return m_stepResolution; }
     float secPerRev() const { return m_secPerRev; }
@@ -96,6 +97,11 @@ public slots:
 
     void setDOffset(float mm);
     void setLateralOffset(float mm);
+    void setZBaseOffset(float mm);
+
+    /// Aktif katmanin taban duzlemini (tabla yuzeyini) bulup z=0'a oturtur:
+    /// m_zBaseOffset otomatik duzeltilir ve katman yeniden projekte edilir.
+    void autoZeroBase(float maxRadiusMm = 45.0f);
     void setAs5600Resolution(float deg);
     void setStepResolution(float deg);
     void setSecPerRev(float sec);
@@ -161,6 +167,7 @@ signals:
     void autoCalibrationFinished(float bestOffset, double score);
     void calibration3DFinished(bool success, QString report);
     void diameterCalibrationFinished(bool success, QString report, float suggestedDOffset);
+    void zBaseOffsetChanged(float mm);
 
 public slots:
     void updateActiveCalibration(QString filePath);
@@ -188,7 +195,10 @@ public slots:
     /// Bilinen capli silindir bandindan dOffset kalibrasyonu:
     /// [zMin, zMax] araligindaki noktalara daire fit edip olculen yaricapi
     /// bilinen yaricapla karsilastirir; onerilen dOffset'i sinyalle dondurur.
-    void calibrateDiameterAsync(float knownDiameterMm, float zMinMm, float zMaxMm);
+    /// maxRadiusMm: eksenden bu yaricapin disindaki noktalar (tabla cevresi,
+    /// dis ceper vb.) fit'e alinmaz.
+    void calibrateDiameterAsync(float knownDiameterMm, float zMinMm, float zMaxMm,
+                                float maxRadiusMm = 40.0f);
 
 private slots:
     void consumeHardwarePackets();
@@ -222,6 +232,9 @@ private:
 
     float m_dOffset{78.5f};
     float m_lOffset{2.0f};
+    /// Profil x ekseni -> dunya Z donusumu tabani: z = p.x() - m_zBaseOffset.
+    /// Tabla yuzeyinin z=0'a oturmasi icin kullanilir (Oto. Sifirla ile bulunur).
+    float m_zBaseOffset{3.5f};
     float m_as5600Resolution{1.0f};
     float m_stepResolution{1.0f};
     float m_secPerRev{30.0f};

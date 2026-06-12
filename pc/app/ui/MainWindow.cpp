@@ -190,7 +190,7 @@ void MainWindow::setupCentralWidget()
     // Simulation signals -> 3D Visualizer
     connect(m_scanController, &ScanController::simProfileReceived, viz,
             [this, viz](float theta, const QVector<QPointF>& profile)
-            { viz->addProfile(theta, profile, m_scanController->dOffset(), 3.5f, m_scanController->lateralOffset()); });
+            { viz->addProfile(theta, profile, m_scanController->dOffset(), m_scanController->zBaseOffset(), m_scanController->lateralOffset()); });
     // Simulation signals -> 2D Profile Widget
     connect(m_scanController, &ScanController::simProfileReceived, profileWidget,
             &ProfileWidget::updateProfile);

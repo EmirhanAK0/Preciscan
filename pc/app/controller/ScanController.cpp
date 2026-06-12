@@ -656,7 +656,7 @@ void ScanController::projectProfileInto(float thetaDeg,
     const float cosA = std::cos(theta_rad);
     const float sinA = std::sin(theta_rad);
     const float tableZ = m_dOffset;
-    const float zOffset = 3.5f;
+    const float zOffset = m_zBaseOffset;
     const float lateralOffset = m_lOffset;
 
     for (const auto& p : profile) {
@@ -783,6 +783,84 @@ void ScanController::setLateralOffset(float mm)
     // Yeni offset, aktif katmana ham veriden yeniden projeksiyon ile yansir
     if (changed && !m_scanning)
         reprojectActiveLayerFromRaw();
+}
+
+void ScanController::setZBaseOffset(float mm)
+{
+    const bool changed = (m_zBaseOffset != mm);
+    m_zBaseOffset = mm;
+    emit logMessage("SYS", QString("Yukseklik ofseti (Z0) guncellendi: %1 mm").arg(m_zBaseOffset, 0, 'f', 2));
+    emit zBaseOffsetChanged(m_zBaseOffset);
+
+    if (changed && !m_scanning)
+        reprojectActiveLayerFromRaw();
+}
+
+void ScanController::autoZeroBase(float maxRadiusMm)
+{
+    // Kaynak: aktif katmanin ham (kalibrasyonsuz) projeksiyonu
+    QVector<QVector3D> cloud;
+    if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
+        const auto& layer = m_layers[m_activeLayerId];
+        if (!layer.rawProfiles.isEmpty()) {
+            for (const auto& sample : layer.rawProfiles) {
+                projectProfileInto(sample.thetaDegree, sample.profile, cloud);
+            }
+        } else if (!layer.originalPoints.isEmpty()) {
+            cloud = layer.originalPoints;
+        }
+    }
+    if (cloud.isEmpty() && !m_lastCloudRaw.isEmpty()) {
+        cloud = m_lastCloudRaw;
+    }
+
+    if (cloud.isEmpty()) {
+        emit logMessage("WRN", "Taban sifirlama icin taranmis veri bulunamadi.");
+        return;
+    }
+
+    // Eksene yakin noktalarin z degerlerini topla (dis ceper/tabla kenari haric)
+    const float maxR2 = maxRadiusMm * maxRadiusMm;
+    std::vector<float> zs;
+    zs.reserve(cloud.size());
+    for (const auto& p : cloud) {
+        if (p.x() * p.x() + p.y() * p.y() <= maxR2) {
+            zs.push_back(p.z());
+        }
+    }
+
+    if (zs.size() < 200) {
+        emit logMessage("WRN",
+            QString("Taban sifirlama: eksenin %1 mm yakininda yeterli nokta yok (%2).")
+                .arg(maxRadiusMm, 0, 'f', 0).arg(zs.size()));
+        return;
+    }
+
+    // Robust taban tespiti: 2. yuzdelik dilim (alt kacak noktalara dayanikli),
+    // ardindan bu seviyenin hemen ustundeki bandin medyani (tabla duzlemi).
+    const size_t kLow = zs.size() / 50; // %2
+    std::nth_element(zs.begin(), zs.begin() + kLow, zs.end());
+    const float zLow = zs[kLow];
+
+    std::vector<float> band;
+    band.reserve(zs.size() / 10);
+    for (float z : zs) {
+        if (z >= zLow - 0.3f && z <= zLow + 1.0f) {
+            band.push_back(z);
+        }
+    }
+    float zBase = zLow;
+    if (band.size() >= 50) {
+        std::nth_element(band.begin(), band.begin() + band.size() / 2, band.end());
+        zBase = band[band.size() / 2];
+    }
+
+    emit logMessage("SYS",
+        QString("Taban tespit edildi: z=%1 mm (%2 nokta). Z0 ofseti duzeltiliyor.")
+            .arg(zBase, 0, 'f', 2).arg(band.size()));
+
+    // z = p.x() - zBaseOffset → tabani 0'a cekmek icin ofseti zBase kadar artir
+    setZBaseOffset(m_zBaseOffset + zBase);
 }
 
 void ScanController::setAs5600Resolution(float val)
@@ -1468,7 +1546,8 @@ void ScanController::autoCalibrateOffsetAsync()
     watcher->setFuture(future);
 }
 
-void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm, float zMaxMm)
+void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm, float zMaxMm,
+                                            float maxRadiusMm)
 {
     if (knownDiameterMm <= 0.0f || zMaxMm <= zMinMm) {
         emit logMessage("ERR", "Cap kalibrasyonu: gecersiz parametreler.");
@@ -1496,6 +1575,32 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
 
     if (cloudCopy.isEmpty()) {
         emit logMessage("WRN", "Cap kalibrasyonu icin taranmis veri bulunamadi. Once silindiri tarayin.");
+        return;
+    }
+
+    // Dis ceper / tabla cevresi filtre: eksenden maxRadius disindaki noktalar
+    // daire fit'ini bozar (fit, buyuk halkaya kacar). Sadece merkeze yakin
+    // noktalar kalir.
+    if (maxRadiusMm > 0.0f) {
+        const float maxR2 = maxRadiusMm * maxRadiusMm;
+        QVector<QVector3D> inner;
+        inner.reserve(cloudCopy.size());
+        for (const auto& p : cloudCopy) {
+            if (p.x() * p.x() + p.y() * p.y() <= maxR2) {
+                inner.push_back(p);
+            }
+        }
+        const int removed = cloudCopy.size() - inner.size();
+        cloudCopy = std::move(inner);
+        if (removed > 0) {
+            emit logMessage("SYS",
+                QString("Cap kalibrasyonu: eksenden %1 mm disindaki %2 nokta (ceper) elendi.")
+                    .arg(maxRadiusMm, 0, 'f', 0).arg(removed));
+        }
+    }
+
+    if (cloudCopy.isEmpty()) {
+        emit logMessage("WRN", "Cap kalibrasyonu: yaricap filtresi sonrasi nokta kalmadi.");
         return;
     }
 

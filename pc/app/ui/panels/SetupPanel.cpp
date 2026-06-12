@@ -99,6 +99,37 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     lOffsetLayout->addWidget(m_lOffsetSpin);
     lOffsetLayout->addWidget(m_autoCalibBtn);
 
+    // Yukseklik tabani (Z0): profil x'inden dunya Z'sine donusum ofseti.
+    // Tabla yuzeyi z=0'a oturmuyorsa buradan duzeltilir.
+    m_zBaseSpin = new QDoubleSpinBox(this);
+    m_zBaseSpin->setRange(-200.0, 200.0);
+    m_zBaseSpin->setDecimals(2);
+    m_zBaseSpin->setSingleStep(0.1);
+    m_zBaseSpin->setValue(3.5);
+    m_zBaseSpin->setSuffix(" mm");
+    applySpinStyle(m_zBaseSpin);
+
+    m_autoZeroBtn = new QPushButton("Tabanı Sıfırla", this);
+    m_autoZeroBtn->setToolTip(
+        "Aktif katmanın taban düzlemini (tabla yüzeyini) otomatik bulup\n"
+        "z=0'a oturtur. Katman ham veriden yeniden projekte edilir.");
+    m_autoZeroBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #2a4a6a;"
+        "  color: white;"
+        "  border: 1px solid #3a5a7a;"
+        "  border-radius: 4px;"
+        "  padding: 2px 5px;"
+        "}"
+        "QPushButton:hover { background: #3a5a7a; }"
+    );
+
+    auto* zBaseLayout = new QHBoxLayout();
+    zBaseLayout->setContentsMargins(0, 0, 0, 0);
+    zBaseLayout->setSpacing(5);
+    zBaseLayout->addWidget(m_zBaseSpin);
+    zBaseLayout->addWidget(m_autoZeroBtn);
+
     m_as5600ResSpin = new QDoubleSpinBox(this);
     m_as5600ResSpin->setRange(0.01, 10.0);
     m_as5600ResSpin->setDecimals(2);
@@ -131,6 +162,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
 
     form->addRow("Lazer Ofseti (Z):", dOffsetLayout);
     form->addRow("Lateral Ofset (X):", lOffsetLayout);
+    form->addRow("Yükseklik Tabanı (Z0):", zBaseLayout);
     form->addRow("AS5600 Çözünürlüğü:", m_as5600ResSpin);
     form->addRow("Step Çözünürlüğü:", m_stepResSpin);
     form->addRow("Profil Hızı (Hz):", m_profileRateSpin);
@@ -263,6 +295,14 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     connect(m_autoCalibBtn, &QPushButton::clicked, this, [this]() {
         if (m_ctrl) m_ctrl->autoCalibrateOffsetAsync();
     });
+    connect(m_autoZeroBtn, &QPushButton::clicked, this, [this]() {
+        if (m_ctrl) m_ctrl->autoZeroBase();
+    });
+    connect(m_ctrl, &ScanController::zBaseOffsetChanged, this, [this](float mm) {
+        m_zBaseSpin->blockSignals(true);
+        m_zBaseSpin->setValue(mm);
+        m_zBaseSpin->blockSignals(false);
+    });
     connect(m_diamCalibBtn, &QPushButton::clicked, this, [this]() {
         if (!m_ctrl) return;
 
@@ -296,9 +336,20 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
         zMaxSpin->setValue(20.0);
         zMaxSpin->setSuffix(" mm");
 
+        auto* maxRadiusSpin = new QDoubleSpinBox(&dlg);
+        maxRadiusSpin->setRange(5.0, 200.0);
+        maxRadiusSpin->setDecimals(1);
+        maxRadiusSpin->setValue(40.0);
+        maxRadiusSpin->setSuffix(" mm");
+        maxRadiusSpin->setToolTip(
+            "Eksenden bu yarıçapın dışındaki noktalar fit'e alınmaz.\n"
+            "Tabla çevresindeki dış çeper/halkayı elemek için silindir\n"
+            "yarıçapından büyük ama çeper yarıçapından küçük seçin.");
+
         formL->addRow("Bilinen çap (kumpas):", diamSpin);
         formL->addRow("Bant Z min:", zMinSpin);
         formL->addRow("Bant Z max:", zMaxSpin);
+        formL->addRow("Maks. yarıçap (çeper filtresi):", maxRadiusSpin);
         dlgLayout->addLayout(formL);
 
         auto* btnRow = new QHBoxLayout();
@@ -317,7 +368,8 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
             m_ctrl->calibrateDiameterAsync(
                 static_cast<float>(diamSpin->value()),
                 static_cast<float>(zMinSpin->value()),
-                static_cast<float>(zMaxSpin->value()));
+                static_cast<float>(zMaxSpin->value()),
+                static_cast<float>(maxRadiusSpin->value()));
         }
     });
     connect(m_ctrl, &ScanController::diameterCalibrationFinished, this,
@@ -417,6 +469,7 @@ void SetupPanel::onApplyClicked()
 
     m_ctrl->setDOffset(static_cast<float>(m_dOffsetSpin->value()));
     m_ctrl->setLateralOffset(static_cast<float>(m_lOffsetSpin->value()));
+    m_ctrl->setZBaseOffset(static_cast<float>(m_zBaseSpin->value()));
     m_ctrl->setAs5600Resolution(static_cast<float>(m_as5600ResSpin->value()));
     m_ctrl->setStepResolution(static_cast<float>(m_stepResSpin->value()));
     m_ctrl->setLaserProfileRate(m_profileRateSpin->value());
@@ -439,6 +492,7 @@ void SetupPanel::onReadClicked()
 
     m_dOffsetSpin->setValue(m_ctrl->dOffset());
     m_lOffsetSpin->setValue(m_ctrl->lateralOffset());
+    m_zBaseSpin->setValue(m_ctrl->zBaseOffset());
     m_as5600ResSpin->setValue(m_ctrl->as5600Resolution());
     m_stepResSpin->setValue(m_ctrl->stepResolution());
     m_profileRateSpin->setValue(m_ctrl->laserProfileRate());

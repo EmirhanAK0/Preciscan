@@ -30,6 +30,8 @@ private:
 
     QDoubleSpinBox* m_dOffsetSpin = nullptr;
     QDoubleSpinBox* m_lOffsetSpin = nullptr;
+    QDoubleSpinBox* m_zBaseSpin = nullptr;
+    QPushButton* m_autoZeroBtn = nullptr;
     QDoubleSpinBox* m_as5600ResSpin = nullptr;
     QDoubleSpinBox* m_stepResSpin = nullptr;
 
