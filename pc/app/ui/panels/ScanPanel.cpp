@@ -339,8 +339,14 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
         if (path.isEmpty()) return;
 
-        if (io::writePLY(path, merged)) {
-            QMessageBox::information(this, "Basarili", QString("%1 nokta basariyla kaydedildi.").arg(merged.size()));
+        // Normalli kaydet (eksenden-disa yonelimli) — MeshLab'da dogrudan
+        // Poisson mesh kurulabilir, normal hesaplama adimi gerekmez.
+        const QVector<QVector3D> normals = core::PointCloudProcessor::computeNormals(merged);
+        if (io::writePLYWithNormals(path, merged, normals)) {
+            QMessageBox::information(this, "Basarili",
+                QString("%1 nokta basariyla kaydedildi (%2).")
+                    .arg(merged.size())
+                    .arg(normals.isEmpty() ? "normalsiz" : "normalli"));
             appendLog("SYS", QString("PLY disa aktarildi: %1 (%2 nokta)").arg(path).arg(merged.size()));
         } else {
             QMessageBox::critical(this, "Hata", "Dosya kaydedilirken bir hata olustu.");

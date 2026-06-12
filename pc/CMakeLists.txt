@@ -70,7 +70,7 @@ if(Qt6_FOUND)
     find_package(OpenGL REQUIRED)
 
     find_package(Eigen3 REQUIRED)
-    find_package(PCL REQUIRED COMPONENTS common sample_consensus features filters io segmentation search)
+    find_package(PCL REQUIRED COMPONENTS common sample_consensus features filters io segmentation search registration surface)
 
     add_executable(preciscan_ui
         app/main_ui.cpp

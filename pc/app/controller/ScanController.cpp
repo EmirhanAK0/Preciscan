@@ -753,8 +753,13 @@ void ScanController::saveCurrentScan(const QString& path)
     if (m_lastCloud.isEmpty())
         return;
 
-    io::writePLY(path, m_lastCloud);
-    emit logMessage("OK", QString("Kaydedildi: %1").arg(path));
+    // Normalli kaydet: MeshLab'da normal hesaplama adimi atlanir,
+    // dogrudan Poisson mesh kurulabilir.
+    const QVector<QVector3D> normals = core::PointCloudProcessor::computeNormals(m_lastCloud);
+    io::writePLYWithNormals(path, m_lastCloud, normals);
+    emit logMessage("OK", QString("Kaydedildi (%1): %2")
+                              .arg(normals.isEmpty() ? "normalsiz" : "normalli")
+                              .arg(path));
 }
 
 void ScanController::setDOffset(float mm)
@@ -1351,31 +1356,37 @@ void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const Q
 {
     if (m_icpRunning) return;
     m_icpRunning = true;
-    emit processingStarted("ICP Hizalama...");
-    
-    disconnect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
-    connect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, &ScanController::onIcpFinished);
-    
-    QFuture<QVector<QVector3D>> future = QtConcurrent::run([target, source, icpMode]() -> QVector<QVector3D> {
-        QMatrix4x4 transform = core::PointCloudProcessor::calculateICP(source, target, icpMode, 50, 1e-5f);
-        QVector<QVector3D> transformedSource;
-        transformedSource.reserve(source.size());
-        
-        QMatrix4x4 initialRot;
-        if (icpMode == 1) {
-            initialRot.scale(1.0f, -1.0f, -1.0f);
-        } else if (icpMode == 2) {
-            initialRot.rotate(90.0f, 1.0f, 0.0f, 0.0f);
-        } else if (icpMode == 3) {
-            initialRot.rotate(-90.0f, 1.0f, 0.0f, 0.0f);
-        }
-        transform = transform * initialRot;
-        for (const auto& p : source) {
-            transformedSource.push_back(transform.map(p));
-        }
+    emit processingStarted("Hizalama + Birlestirme...");
+    emit logMessage("SYS", "Birlestirme pipeline'i basladi: kaba hizalama (tabla kisiti + yaw) -> GICP -> fuzyon");
+
+    disconnect(&m_icpWatcher, &QFutureWatcher<core::MergeResult>::finished, this, nullptr);
+    connect(&m_icpWatcher, &QFutureWatcher<core::MergeResult>::finished, this, &ScanController::onIcpFinished);
+
+    QFuture<core::MergeResult> future = QtConcurrent::run([target, source, icpMode]() -> core::MergeResult {
+        core::MergeResult mr;
+
+        // 1) Kaba hizalama: preset rotasyon + tabla kisiti (taban/centroid)
+        //    + Z etrafinda yaw taramasi. 6 slider'li manuel hizalamanin yerini alir.
+        const QMatrix4x4 coarse = core::PointCloudProcessor::coarseAlignWithTableConstraint(
+            source, target, icpMode, /*yawSearch=*/true);
+
+        // 2) Ince hizalama: iki asamali GICP (plane-to-plane)
+        const core::AlignResult fine = core::PointCloudProcessor::refineAlignGICP(
+            source, target, coarse);
+
+        // 3) Donusumu TAM cozunurluklu kaynaga uygula ve birlestir
         QVector<QVector3D> merged = target;
-        merged.append(transformedSource);
-        return merged;
+        merged.reserve(target.size() + source.size());
+        for (const auto& p : source) {
+            merged.push_back(fine.transform.map(p));
+        }
+
+        // 4) Fuzyon: cift cidari tek yuzeye erit (voxel-avg + MLS + SOR)
+        mr.cloud = core::PointCloudProcessor::fuseClouds(merged, 0.25f, 1.2f);
+        mr.rmsMm = fine.rmsMm;
+        mr.overlapRatio = fine.overlapRatio;
+        mr.icpSuccess = fine.success;
+        return mr;
     });
     m_icpWatcher.setFuture(future);
 }
@@ -1383,10 +1394,34 @@ void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const Q
 void ScanController::onIcpFinished()
 {
     m_icpRunning = false;
-    QVector<QVector3D> merged = m_icpWatcher.result();
-    disconnect(&m_icpWatcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
-    if (!merged.isEmpty()) {
-        addNewLayer(merged, "ICP Birlesimi");
+    const core::MergeResult mr = m_icpWatcher.result();
+    disconnect(&m_icpWatcher, &QFutureWatcher<core::MergeResult>::finished, this, nullptr);
+
+    if (!mr.cloud.isEmpty()) {
+        emit logMessage(mr.icpSuccess ? "OK" : "WARN",
+            QString("Birlestirme tamamlandi: RMS=%1 mm, ortusme=%2%, GICP=%3, nokta=%4")
+                .arg(mr.rmsMm, 0, 'f', 3)
+                .arg(mr.overlapRatio * 100.0f, 0, 'f', 1)
+                .arg(mr.icpSuccess ? "yakinsadi" : "YAKINSAMADI (kaba hizalama kullanildi)")
+                .arg(mr.cloud.size()));
+
+        if (mr.icpSuccess && mr.overlapRatio < 0.15f) {
+            emit logMessage("WARN",
+                "Ortusme orani dusuk (<%15). Taramalar arasinda yeterli ortak yuzey "
+                "olmayabilir; hizalama guvenilir degilse farkli oryantasyon deneyin.");
+        }
+        if (mr.icpSuccess && mr.rmsMm > 0.3f) {
+            emit logMessage("WARN",
+                "Hizalama RMS yuksek (>0.3 mm). dOffset/lateral kalibrasyonunu dogrulayin; "
+                "rijit hizalama kalibrasyondan gelen sekil bozulmasini duzeltemez.");
+        }
+
+        addNewLayer(mr.cloud,
+            QString("Birlesim (RMS %1 mm, %2%)")
+                .arg(mr.rmsMm, 0, 'f', 2)
+                .arg(mr.overlapRatio * 100.0f, 0, 'f', 0));
+    } else {
+        emit logMessage("ERR", "Birlestirme basarisiz: sonuc bulutu bos.");
     }
     emit processingFinished();
 }

@@ -37,6 +37,45 @@ bool writePLY(const QString& path, const QVector<QVector3D>& points)
     return true;
 }
 
+bool writePLYWithNormals(const QString& path,
+                         const QVector<QVector3D>& points,
+                         const QVector<QVector3D>& normals)
+{
+    if (normals.size() != points.size())
+        return writePLY(path, points);
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        qDebug() << "PLY dosyasi acilamadi:" << path;
+        return false;
+    }
+
+    QTextStream out(&file);
+
+    out << "ply\n";
+    out << "format ascii 1.0\n";
+    out << "element vertex " << points.size() << "\n";
+    out << "property float x\n";
+    out << "property float y\n";
+    out << "property float z\n";
+    out << "property float nx\n";
+    out << "property float ny\n";
+    out << "property float nz\n";
+    out << "end_header\n";
+
+    for (int i = 0; i < points.size(); ++i)
+    {
+        const auto& p = points[i];
+        const auto& n = normals[i];
+        out << p.x() << " " << p.y() << " " << p.z() << " "
+            << n.x() << " " << n.y() << " " << n.z() << "\n";
+    }
+
+    file.close();
+    return true;
+}
+
 
 bool readPLY(const QString& path, QVector<QVector3D>& points)
 {

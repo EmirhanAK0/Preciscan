@@ -289,8 +289,13 @@ void ProcessPanel::onExportPLY()
     QString fileName = QFileDialog::getSaveFileName(this, "Filtreli PLY Kaydet", "", "PLY Dosyalari (*.ply)");
     if (fileName.isEmpty()) return;
 
-    if (io::writePLY(fileName, points)) {
-        QMessageBox::information(this, "Basarili", QString("%1 nokta basariyla kaydedildi.").arg(points.size()));
+    // Normalli kaydet: MeshLab'da dogrudan Poisson mesh kurmayi saglar
+    const QVector<QVector3D> normals = core::PointCloudProcessor::computeNormals(points);
+    if (io::writePLYWithNormals(fileName, points, normals)) {
+        QMessageBox::information(this, "Basarili",
+            QString("%1 nokta basariyla kaydedildi (%2).")
+                .arg(points.size())
+                .arg(normals.isEmpty() ? "normalsiz" : "normalli"));
     } else {
         QMessageBox::critical(this, "Hata", "Dosya kaydedilirken hata olustu!");
     }

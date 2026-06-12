@@ -16,6 +16,7 @@
 
 #include "../../io/serial_trigger_reader.h"
 #include "../utils/AutoCalibrator.h"
+#include "../utils/point_cloud_processor.h"
 #include "ScanProfileFrame.hpp"
 
 /// Bir tarama katmaninin nokta bulutu ve meta verileri
@@ -293,7 +294,7 @@ private:
     QFutureWatcher<QVector<QVector3D>> m_watcher;
     bool m_meshGenerating = false;
     
-    QFutureWatcher<QVector<QVector3D>> m_icpWatcher;
+    QFutureWatcher<core::MergeResult> m_icpWatcher;
     bool m_icpRunning = false;
     
     QString m_currentTaskName;
