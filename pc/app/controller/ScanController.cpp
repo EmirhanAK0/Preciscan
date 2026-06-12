@@ -5,6 +5,7 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <limits>
 
 #include "../../core/packet.h"
 #include "../../hardware/laser_manager.h"
@@ -1365,23 +1366,51 @@ void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const Q
     QFuture<core::MergeResult> future = QtConcurrent::run([target, source, icpMode]() -> core::MergeResult {
         core::MergeResult mr;
 
-        // 1) Kaba hizalama: preset rotasyon + tabla kisiti (taban/centroid)
-        //    + Z etrafinda yaw taramasi. 6 slider'li manuel hizalamanin yerini alir.
-        const QMatrix4x4 coarse = core::PointCloudProcessor::coarseAlignWithTableConstraint(
-            source, target, icpMode, /*yawSearch=*/true);
+        // 1) Kaba hizalama adaylari.
+        //    icpMode 4 (Mevcut Konumdan): kullanici katmani elle hizalamistir;
+        //    preset/yaw HICBIR sey uygulanmaz, mevcut pozdan dogrudan GICP.
+        //    Diger modlarda: preset + tabla kisiti + yaw taramasinin en iyi 3
+        //    yerel minimumu aday olarak alinir (simetrik objelerde kaba skor
+        //    yanlis 90 derece katina kilitlenebilir; secimi GICP yapar).
+        QVector<QMatrix4x4> candidates;
+        if (icpMode == 4) {
+            candidates.push_back(QMatrix4x4());
+        } else {
+            candidates = core::PointCloudProcessor::coarseAlignCandidates(
+                source, target, icpMode, 3);
+        }
 
-        // 2) Ince hizalama: iki asamali GICP (plane-to-plane)
+        // 2) Eleme turu: her aday hizli GICP'den gecirilir (1.0 mm voxel,
+        //    25 iterasyon); en yuksek ortusme (sıkı 0.5 mm esik) kazanir.
+        QMatrix4x4 bestGuess = candidates.first();
+        if (candidates.size() > 1) {
+            float bestOverlap = -1.0f;
+            float bestRms = std::numeric_limits<float>::max();
+            for (const auto& cand : candidates) {
+                const core::AlignResult quick = core::PointCloudProcessor::refineAlignGICP(
+                    source, target, cand, /*voxelMm=*/1.0f, /*maxIterations=*/25);
+                const float ov = quick.success ? quick.overlapRatio : -1.0f;
+                if (ov > bestOverlap + 0.02f ||
+                    (std::abs(ov - bestOverlap) <= 0.02f && quick.rmsMm < bestRms)) {
+                    bestOverlap = ov;
+                    bestRms = quick.rmsMm;
+                    bestGuess = quick.success ? quick.transform : cand;
+                }
+            }
+        }
+
+        // 3) Ince hizalama: kazanan adaydan tam cozunurluklu iki asamali GICP
         const core::AlignResult fine = core::PointCloudProcessor::refineAlignGICP(
-            source, target, coarse);
+            source, target, bestGuess);
 
-        // 3) Donusumu TAM cozunurluklu kaynaga uygula ve birlestir
+        // 4) Donusumu TAM cozunurluklu kaynaga uygula ve birlestir
         QVector<QVector3D> merged = target;
         merged.reserve(target.size() + source.size());
         for (const auto& p : source) {
             merged.push_back(fine.transform.map(p));
         }
 
-        // 4) Fuzyon: cift cidari tek yuzeye erit (voxel-avg + MLS + SOR)
+        // 5) Fuzyon: cift cidari tek yuzeye erit (voxel-avg + MLS + SOR)
         mr.cloud = core::PointCloudProcessor::fuseClouds(merged, 0.25f, 1.2f);
         mr.rmsMm = fine.rmsMm;
         mr.overlapRatio = fine.overlapRatio;
@@ -1432,7 +1461,8 @@ void ScanController::mergeSelectedLayers(const QVector<int>& layerIds, const QSt
     
     if (mode.contains("ICP", Qt::CaseInsensitive)) {
         int icpMode = 0;
-        if (mode.contains("Ters", Qt::CaseInsensitive)) icpMode = 1;
+        if (mode.contains("Mevcut", Qt::CaseInsensitive)) icpMode = 4;
+        else if (mode.contains("Ters", Qt::CaseInsensitive)) icpMode = 1;
         else if (mode.contains("X+90", Qt::CaseInsensitive)) icpMode = 2;
         else if (mode.contains("X-90", Qt::CaseInsensitive)) icpMode = 3;
 

@@ -177,12 +177,18 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     auto* mergeRow = new QHBoxLayout;
     m_mergeMode    = new QComboBox(this);
     m_mergeMode->addItems({
-        "Birlestir (Z-Offset)", 
-        "ICP ile Birlestir (Duz)", 
+        "Birlestir (Z-Offset)",
+        "ICP ile Birlestir (Duz)",
         "ICP ile Birlestir (Ters / Bas Asagi)",
         "ICP ile Birlestir (Yan / X+90)",
-        "ICP ile Birlestir (Yan / X-90)"
+        "ICP ile Birlestir (Yan / X-90)",
+        "ICP (Mevcut Konumdan / Manuel Sonrasi)"
     });
+    m_mergeMode->setToolTip(
+        "Mevcut Konumdan: Katmani manuel hizaladiysaniz bunu secin —\n"
+        "preset rotasyon ve otomatik yaw aramasi uygulanmaz, mevcut\n"
+        "pozdan dogrudan GICP ince hizalama yapilir. Simetrik objelerde\n"
+        "(yazi/detay hizasi onemliyse) en guvenilir yontemdir.");
     m_mergeMode->setStyleSheet("background:#1a1a1a;color:#ccc;border:1px solid "
                                "#333;border-radius:3px;padding:2px;font-size:10px;");
     m_mergeBtn = new QPushButton("Birlestir", this);

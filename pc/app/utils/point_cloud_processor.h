@@ -82,12 +82,26 @@ public:
         int presetMode,
         bool yawSearch = true);
 
+    /// Kaba hizalama ADAYLARI: yaw taramasindaki en iyi K yerel minimum
+    /// (birbirinden >=30 derece ayrik) icin tam donusumler dondurur.
+    /// Simetrik objelerde (silindir, kare taban) kaba skor yanlis 90 derece
+    /// katina kilitlenebilir; adaylarin her biri GICP'den gecirilip gercek
+    /// metrikle secilmelidir (multi-start).
+    static QVector<QMatrix4x4> coarseAlignCandidates(
+        const QVector<QVector3D>& source,
+        const QVector<QVector3D>& target,
+        int presetMode,
+        int maxCandidates = 3);
+
     /// GICP (Generalized ICP / plane-to-plane) ile iki asamali ince hizalama.
     /// Kismi ortusmeye dayaniklidir; kaba hizalamadan gelen initialGuess sart.
+    /// voxelMm/maxIterations dusurulerek hizli "eleme" kosusu yapilabilir.
     static AlignResult refineAlignGICP(
         const QVector<QVector3D>& source,
         const QVector<QVector3D>& target,
-        const QMatrix4x4& initialGuess);
+        const QMatrix4x4& initialGuess,
+        float voxelMm = 0.5f,
+        int maxIterations = 60);
 
     /// Hizalanmis birlesik buluttaki cift cidari tek yuzeye eritir:
     /// voxel-ortalama (centroid) + MLS yuzey projeksiyonu + hafif SOR.

@@ -467,14 +467,17 @@ float trimmedNNScore(const QVector<QVector3D>& src,
 
 } // namespace
 
-QMatrix4x4 PointCloudProcessor::coarseAlignWithTableConstraint(
+QVector<QMatrix4x4> PointCloudProcessor::coarseAlignCandidates(
     const QVector<QVector3D>& source,
     const QVector<QVector3D>& target,
     int presetMode,
-    bool yawSearch)
+    int maxCandidates)
 {
-    QMatrix4x4 identity;
-    if (source.isEmpty() || target.isEmpty()) return identity;
+    QVector<QMatrix4x4> candidates;
+    if (source.isEmpty() || target.isEmpty()) {
+        candidates.push_back(QMatrix4x4());
+        return candidates;
+    }
 
     // 1) Preset rotasyon
     QMatrix4x4 R;
@@ -489,12 +492,15 @@ QMatrix4x4 PointCloudProcessor::coarseAlignWithTableConstraint(
     // Hiz icin seyrelt
     QVector<QVector3D> src = filterVoxelGrid(source, 1.5f);
     QVector<QVector3D> tgt = filterVoxelGrid(target, 1.5f);
-    if (src.isEmpty() || tgt.isEmpty()) return R;
+    if (src.isEmpty() || tgt.isEmpty()) {
+        candidates.push_back(R);
+        return candidates;
+    }
 
     for (auto& p : src) p = R.map(p);
 
     // 2) Tabla kisiti: robust tabanlari esitle. Iki tarama da ayni objenin
-    //    tablada durusudur; dogru oryantasyonda z-aralieklari cakismalidir.
+    //    tablada durusudur; dogru oryantasyonda z-araliklari cakismalidir.
     const float srcMinZ = percentileZ(src, 0.02f);
     const float tgtMinZ = percentileZ(tgt, 0.02f);
 
@@ -507,13 +513,18 @@ QMatrix4x4 PointCloudProcessor::coarseAlignWithTableConstraint(
 
     QMatrix4x4 base = Tr * R;
 
-    if (!yawSearch) return base;
+    // maxCandidates <= 0: yaw aramasi istenmiyor, sadece taban hizalama
+    if (maxCandidates <= 0) {
+        candidates.push_back(base);
+        return candidates;
+    }
 
-    // 4) Yaw taramasi: tek kalan serbestlik derecesi Z etrafindaki donus.
-    //    Kaba (10 derece) + ince (2 derece) iki asamali arama.
+    // 4) Yaw taramasi: tum 10 derecelik pozlar skorlanir; en iyi K yerel
+    //    minimum (>=30 derece ayrik) aday olarak dondurulur. Simetrik
+    //    objelerde dogru poz kaba skorda 2./3. siraya dusebilir — secim
+    //    GICP elemesine birakilir.
     for (auto& p : src) p = Tr.map(p); // base uygulanmis hali
 
-    // Cok nokta varsa skoru hizlandirmak icin orneklemeyi sinirla
     QVector<QVector3D> srcS;
     if (src.size() > 4000) {
         srcS.reserve(4000);
@@ -543,18 +554,54 @@ QMatrix4x4 PointCloudProcessor::coarseAlignWithTableConstraint(
         return trimmedNNScore(rotated, tree, tgt);
     };
 
-    float bestYaw = 0.0f;
-    float bestScore = std::numeric_limits<float>::max();
+    // Kaba grid skorlari
+    struct YawScore { float yaw; float score; };
+    std::vector<YawScore> grid;
+    grid.reserve(36);
     for (int yaw = 0; yaw < 360; yaw += 10) {
-        const float s = scoreYaw(static_cast<float>(yaw));
-        if (s < bestScore) { bestScore = s; bestYaw = static_cast<float>(yaw); }
+        grid.push_back({static_cast<float>(yaw), scoreYaw(static_cast<float>(yaw))});
     }
-    for (float yaw = bestYaw - 8.0f; yaw <= bestYaw + 8.0f; yaw += 2.0f) {
-        const float s = scoreYaw(yaw);
-        if (s < bestScore) { bestScore = s; bestYaw = yaw; }
+    std::sort(grid.begin(), grid.end(),
+              [](const YawScore& a, const YawScore& b) { return a.score < b.score; });
+
+    // En iyi K aday: birbirinden >=30 derece uzak olanlari sec
+    std::vector<float> picked;
+    for (const auto& g : grid) {
+        if (static_cast<int>(picked.size()) >= maxCandidates) break;
+        bool tooClose = false;
+        for (float p : picked) {
+            float d = std::abs(g.yaw - p);
+            if (d > 180.0f) d = 360.0f - d;
+            if (d < 30.0f) { tooClose = true; break; }
+        }
+        if (!tooClose) picked.push_back(g.yaw);
+    }
+    if (picked.empty()) picked.push_back(0.0f);
+
+    // Her adayi 2 derecelik ince taramayla rafine et
+    for (float coarseYaw : picked) {
+        float bestYaw = coarseYaw;
+        float bestScore = scoreYaw(coarseYaw);
+        for (float yaw = coarseYaw - 8.0f; yaw <= coarseYaw + 8.0f; yaw += 2.0f) {
+            const float s = scoreYaw(yaw);
+            if (s < bestScore) { bestScore = s; bestYaw = yaw; }
+        }
+        candidates.push_back(yawTransform(bestYaw) * base);
     }
 
-    return yawTransform(bestYaw) * base;
+    return candidates;
+}
+
+QMatrix4x4 PointCloudProcessor::coarseAlignWithTableConstraint(
+    const QVector<QVector3D>& source,
+    const QVector<QVector3D>& target,
+    int presetMode,
+    bool yawSearch)
+{
+    const QVector<QMatrix4x4> cands =
+        coarseAlignCandidates(source, target, presetMode, yawSearch ? 1 : 0);
+    if (cands.isEmpty()) return QMatrix4x4();
+    return cands.first();
 }
 
 } // namespace core
@@ -604,16 +651,18 @@ Eigen::Matrix4f toEigen(const QMatrix4x4& m)
 AlignResult PointCloudProcessor::refineAlignGICP(
     const QVector<QVector3D>& source,
     const QVector<QVector3D>& target,
-    const QMatrix4x4& initialGuess)
+    const QMatrix4x4& initialGuess,
+    float voxelMm,
+    int maxIterations)
 {
     AlignResult res;
     res.transform = initialGuess;
 
     if (source.size() < 100 || target.size() < 100) return res;
 
-    // GICP icin seyreltilmis kopyalar (0.5 mm: hassasiyet/sure dengesi)
-    QVector<QVector3D> srcQ = filterVoxelGrid(source, 0.5f);
-    QVector<QVector3D> tgtQ = filterVoxelGrid(target, 0.5f);
+    // GICP icin seyreltilmis kopyalar (varsayilan 0.5 mm: hassasiyet/sure dengesi)
+    QVector<QVector3D> srcQ = filterVoxelGrid(source, voxelMm);
+    QVector<QVector3D> tgtQ = filterVoxelGrid(target, voxelMm);
 
     auto src = toPcl(srcQ);
     auto tgt = toPcl(tgtQ);
@@ -621,7 +670,7 @@ AlignResult PointCloudProcessor::refineAlignGICP(
     pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> gicp;
     gicp.setInputSource(src);
     gicp.setInputTarget(tgt);
-    gicp.setMaximumIterations(60);
+    gicp.setMaximumIterations(maxIterations);
     gicp.setTransformationEpsilon(1e-8);
     gicp.setEuclideanFitnessEpsilon(1e-8);
 
@@ -646,13 +695,14 @@ AlignResult PointCloudProcessor::refineAlignGICP(
     res.success = true;
 
     // Metrikler: donusturulmus kaynak -> hedef NN mesafeleri.
-    // Esik 0.8 mm: altindakiler "ortusen" sayilir.
+    // Esik 0.5 mm: altindakiler "ortusen" sayilir. Sıkı esik, simetrik
+    // objelerde yanlis 90 derece pozunu (harf/detay kaymasi) cezalandirir.
     {
         PointCloudAdapter adapter(tgtQ);
         PointCloudKDTree tree(3, adapter, nanoflann::KDTreeSingleIndexAdaptorParams(10));
         tree.buildIndex();
 
-        const float inlierThreshSq = 0.8f * 0.8f;
+        const float inlierThreshSq = 0.5f * 0.5f;
         double sumSq = 0;
         int inliers = 0;
         for (const auto& p0 : srcQ) {
