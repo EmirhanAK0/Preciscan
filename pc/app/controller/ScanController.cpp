@@ -1467,3 +1467,119 @@ void ScanController::autoCalibrateOffsetAsync()
 
     watcher->setFuture(future);
 }
+
+void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm, float zMaxMm)
+{
+    if (knownDiameterMm <= 0.0f || zMaxMm <= zMinMm) {
+        emit logMessage("ERR", "Cap kalibrasyonu: gecersiz parametreler.");
+        return;
+    }
+
+    // Kaynak veri: KALIBRE EDILMEMIS (ham projeksiyon) bulut gerekir, cunku
+    // dOffset duzeltmesi ham projeksiyon formulune (r = dOffset - y) aittir.
+    // Tercih sirasi: aktif katmanin ham profillerinden guncel parametrelerle
+    // taze projeksiyon → katmanin originalPoints'i → m_lastCloudRaw.
+    QVector<QVector3D> cloudCopy;
+    if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
+        const auto& layer = m_layers[m_activeLayerId];
+        if (!layer.rawProfiles.isEmpty()) {
+            for (const auto& sample : layer.rawProfiles) {
+                projectProfileInto(sample.thetaDegree, sample.profile, cloudCopy);
+            }
+        } else if (!layer.originalPoints.isEmpty()) {
+            cloudCopy = layer.originalPoints;
+        }
+    }
+    if (cloudCopy.isEmpty() && !m_lastCloudRaw.isEmpty()) {
+        cloudCopy = m_lastCloudRaw;
+    }
+
+    if (cloudCopy.isEmpty()) {
+        emit logMessage("WRN", "Cap kalibrasyonu icin taranmis veri bulunamadi. Once silindiri tarayin.");
+        return;
+    }
+
+    emit processingStarted("Cap Kalibrasyonu (dOffset)");
+
+    const float dOffsetNow = m_dOffset;
+    const float lOffsetNow = m_lOffset;
+
+    auto future = QtConcurrent::run(
+        [cloudCopy, knownDiameterMm, zMinMm, zMaxMm]() -> CircleFitResult {
+            return CalibrationEngine::fitCircleXY(cloudCopy, zMinMm, zMaxMm);
+        });
+
+    auto watcher = new QFutureWatcher<CircleFitResult>(this);
+    connect(watcher, &QFutureWatcher<CircleFitResult>::finished, this,
+            [this, watcher, knownDiameterMm, dOffsetNow, lOffsetNow]() {
+        const CircleFitResult fit = watcher->result();
+        watcher->deleteLater();
+        emit processingFinished();
+
+        if (!fit.success) {
+            const QString msg = QString(
+                "Cap kalibrasyonu basarisiz: secilen z-bandinda yeterli/uygun nokta yok "
+                "(bantta %1 nokta bulundu). Banti silindirin duz govdesinden secin.")
+                    .arg(fit.totalPoints);
+            emit logMessage("ERR", msg);
+            emit diameterCalibrationFinished(false, msg, dOffsetNow);
+            return;
+        }
+
+        const float rTrue = knownDiameterMm / 2.0f;
+
+        // dOffset hatasi eps, olculen yaricapi yaklasik eps*sqrt(R^2-L^2)/R
+        // kadar kaydirir (lazer hatti eksenden L kadar kacik oldugu icin).
+        // Geometrik duzeltme faktoru ile eps'i geri cozuyoruz.
+        float geomFactor = 1.0f;
+        if (std::abs(lOffsetNow) < rTrue * 0.9f) {
+            geomFactor = rTrue / std::sqrt(rTrue * rTrue - lOffsetNow * lOffsetNow);
+        }
+        const float eps = (fit.radiusMm - rTrue) * geomFactor;
+        const float suggested = dOffsetNow - eps;
+
+        const float centerDist = std::sqrt(fit.centerXMm * fit.centerXMm +
+                                           fit.centerYMm * fit.centerYMm);
+
+        QString report = QString(
+            "Cap Kalibrasyonu Sonucu\n\n"
+            "[ Olcum ]\n"
+            "• Olculen cap: %1 mm (bilinen: %2 mm)\n"
+            "• Cap farki: %3 mm\n"
+            "• Fit RMS artigi: %4 mm\n"
+            "• Merkez kaymasi (eksene gore): %5 mm (X:%6, Y:%7)\n"
+            "• Kullanilan nokta: %8 / %9\n\n"
+            "[ Oneri ]\n"
+            "• dOffset hatasi (eps): %10 mm\n"
+            "• Mevcut dOffset: %11 mm → Onerilen: %12 mm")
+                .arg(fit.radiusMm * 2.0f, 0, 'f', 3)
+                .arg(knownDiameterMm, 0, 'f', 3)
+                .arg((fit.radiusMm - rTrue) * 2.0f, 0, 'f', 3)
+                .arg(fit.rmsResidualMm, 0, 'f', 3)
+                .arg(centerDist, 0, 'f', 2)
+                .arg(fit.centerXMm, 0, 'f', 2)
+                .arg(fit.centerYMm, 0, 'f', 2)
+                .arg(fit.usedPoints)
+                .arg(fit.totalPoints)
+                .arg(eps, 0, 'f', 3)
+                .arg(dOffsetNow, 0, 'f', 2)
+                .arg(suggested, 0, 'f', 2);
+
+        // Guvenilirlik uyarilari
+        if (fit.rmsResidualMm > 0.15f) {
+            report += "\n\nUYARI: Fit RMS artigi yuksek (>0.15 mm). Once lateral "
+                      "offseti kalibre edin veya banti daha temiz bir bolgeden secin.";
+        }
+        if (centerDist > 10.0f) {
+            report += "\n\nUYARI: Silindir eksenden cok uzak yerlestirilmis "
+                      "(>10 mm). Parcayi tabla merkezine yakin koyup tekrar tarayin.";
+        }
+
+        emit logMessage("SYS", QString("Cap kalibrasyonu: olculen=%1 mm, onerilen dOffset=%2 mm")
+                                   .arg(fit.radiusMm * 2.0f, 0, 'f', 3)
+                                   .arg(suggested, 0, 'f', 2));
+        emit diameterCalibrationFinished(true, report, suggested);
+    });
+
+    watcher->setFuture(future);
+}

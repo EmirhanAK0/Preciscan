@@ -160,6 +160,7 @@ signals:
     void layersUpdated();
     void autoCalibrationFinished(float bestOffset, double score);
     void calibration3DFinished(bool success, QString report);
+    void diameterCalibrationFinished(bool success, QString report, float suggestedDOffset);
 
 public slots:
     void updateActiveCalibration(QString filePath);
@@ -183,6 +184,11 @@ public slots:
     // Otomatik Kalibrasyon
     void autoCalibrateOffsetAsync();
     void start3DCalibrationAsync(int method = 0);
+
+    /// Bilinen capli silindir bandindan dOffset kalibrasyonu:
+    /// [zMin, zMax] araligindaki noktalara daire fit edip olculen yaricapi
+    /// bilinen yaricapla karsilastirir; onerilen dOffset'i sinyalle dondurur.
+    void calibrateDiameterAsync(float knownDiameterMm, float zMinMm, float zMaxMm);
 
 private slots:
     void consumeHardwarePackets();

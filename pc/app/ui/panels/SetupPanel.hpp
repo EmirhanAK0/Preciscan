@@ -43,6 +43,7 @@ private:
     QPushButton* m_readBtn = nullptr;
     QPushButton* m_applyBtn = nullptr;
     QPushButton* m_autoCalibBtn = nullptr;
+    QPushButton* m_diamCalibBtn = nullptr;
     QPushButton* m_start3DCalibBtn = nullptr;
     QComboBox* m_calibMethodCombo = nullptr;
 

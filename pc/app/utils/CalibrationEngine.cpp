@@ -241,3 +241,135 @@ AutoCalibResult CalibrationEngine::findOptimalLateralOffsetFromRaw(
 
     return result;
 }
+
+namespace {
+
+// Kasa algebraik daire fit'i: x^2 + y^2 = a*x + b*y + c lineer sistemini
+// en kucuk karelerle cozer. Merkez = (a/2, b/2), R = sqrt(c + a^2/4 + b^2/4).
+bool kasaCircleFit(const std::vector<std::pair<float, float>>& pts,
+                   float& cx, float& cy, float& radius)
+{
+    const size_t n = pts.size();
+    if (n < 3) return false;
+
+    // Normal denklemler (3x3, double hassasiyetle)
+    double Sx = 0, Sy = 0, Sxx = 0, Syy = 0, Sxy = 0;
+    double Sxz = 0, Syz = 0, Sz = 0; // z = x^2 + y^2
+    for (const auto& p : pts) {
+        const double x = p.first, y = p.second;
+        const double z = x * x + y * y;
+        Sx += x;   Sy += y;
+        Sxx += x * x; Syy += y * y; Sxy += x * y;
+        Sxz += x * z; Syz += y * z; Sz += z;
+    }
+    const double N = static_cast<double>(n);
+
+    // | Sxx Sxy Sx | |a|   |Sxz|
+    // | Sxy Syy Sy | |b| = |Syz|
+    // | Sx  Sy  N  | |c|   |Sz |
+    const double det = Sxx * (Syy * N - Sy * Sy)
+                     - Sxy * (Sxy * N - Sy * Sx)
+                     + Sx  * (Sxy * Sy - Syy * Sx);
+    if (std::abs(det) < 1e-9) return false;
+
+    const double detA = Sxz * (Syy * N - Sy * Sy)
+                      - Sxy * (Syz * N - Sy * Sz)
+                      + Sx  * (Syz * Sy - Syy * Sz);
+    const double detB = Sxx * (Syz * N - Sy * Sz)
+                      - Sxz * (Sxy * N - Sy * Sx)
+                      + Sx  * (Sxy * Sz - Syz * Sx);
+    const double detC = Sxx * (Syy * Sz - Syz * Sy)
+                      - Sxy * (Sxy * Sz - Syz * Sx)
+                      + Sxz * (Sxy * Sy - Syy * Sx);
+
+    const double a = detA / det;
+    const double b = detB / det;
+    const double c = detC / det;
+
+    const double r2 = c + (a * a + b * b) / 4.0;
+    if (r2 <= 0.0) return false;
+
+    cx = static_cast<float>(a / 2.0);
+    cy = static_cast<float>(b / 2.0);
+    radius = static_cast<float>(std::sqrt(r2));
+    return true;
+}
+
+} // namespace
+
+CircleFitResult CalibrationEngine::fitCircleXY(
+    const QVector<QVector3D>& cloud,
+    float zMin,
+    float zMax)
+{
+    CircleFitResult result;
+
+    // 1. Z bandindaki noktalari topla
+    std::vector<std::pair<float, float>> pts;
+    pts.reserve(cloud.size() / 4);
+    for (const auto& p : cloud) {
+        if (p.z() >= zMin && p.z() <= zMax) {
+            pts.emplace_back(p.x(), p.y());
+        }
+    }
+    result.totalPoints = static_cast<int>(pts.size());
+
+    if (pts.size() < 50) {
+        return result; // Guvenilir fit icin cok az nokta
+    }
+
+    // 2. Ilk fit + 2 tur robust eleme (2.5 sigma): baski yuzey kusurlari,
+    //    taban gecisinden sizan noktalar vb. fit'i cekmesin.
+    float cx = 0, cy = 0, r = 0;
+    if (!kasaCircleFit(pts, cx, cy, r)) {
+        return result;
+    }
+
+    for (int pass = 0; pass < 2; ++pass) {
+        // Radyal artiklarin ortalama ve sigmasi
+        double sum = 0, sumSq = 0;
+        std::vector<float> res(pts.size());
+        for (size_t i = 0; i < pts.size(); ++i) {
+            const float dx = pts[i].first - cx;
+            const float dy = pts[i].second - cy;
+            res[i] = std::sqrt(dx * dx + dy * dy) - r;
+            sum += res[i];
+            sumSq += static_cast<double>(res[i]) * res[i];
+        }
+        const double mean = sum / pts.size();
+        const double sigma = std::sqrt(std::max(0.0, sumSq / pts.size() - mean * mean));
+        if (sigma < 1e-6) break; // zaten mukemmel
+
+        const float thresh = static_cast<float>(2.5 * sigma);
+        std::vector<std::pair<float, float>> kept;
+        kept.reserve(pts.size());
+        for (size_t i = 0; i < pts.size(); ++i) {
+            if (std::abs(res[i] - static_cast<float>(mean)) <= thresh) {
+                kept.push_back(pts[i]);
+            }
+        }
+        if (kept.size() < 50 || kept.size() == pts.size()) break;
+        pts.swap(kept);
+
+        if (!kasaCircleFit(pts, cx, cy, r)) {
+            return result;
+        }
+    }
+
+    // 3. Son fit kalitesi
+    double sumSq = 0;
+    for (const auto& p : pts) {
+        const float dx = p.first - cx;
+        const float dy = p.second - cy;
+        const float d = std::sqrt(dx * dx + dy * dy) - r;
+        sumSq += static_cast<double>(d) * d;
+    }
+
+    result.success = true;
+    result.centerXMm = cx;
+    result.centerYMm = cy;
+    result.radiusMm = r;
+    result.rmsResidualMm = static_cast<float>(std::sqrt(sumSq / pts.size()));
+    result.usedPoints = static_cast<int>(pts.size());
+    return result;
+}

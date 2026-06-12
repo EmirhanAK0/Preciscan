@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QInputDialog>
+#include <QDialog>
 #include <QDir>
 #include "../../utils/AutoCalibrator.h"
 
@@ -49,6 +50,27 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_dOffsetSpin->setValue(78.5);
     m_dOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_dOffsetSpin);
+
+    m_diamCalibBtn = new QPushButton("Çap Kalib.", this);
+    m_diamCalibBtn->setToolTip(
+        "Bilinen çaplı silindir taramasından dOffset'i kalibre eder.\n"
+        "Silindiri tabla merkezine yakın koyup tarayın, sonra bu butona basın.");
+    m_diamCalibBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #2a4a6a;"
+        "  color: white;"
+        "  border: 1px solid #3a5a7a;"
+        "  border-radius: 4px;"
+        "  padding: 2px 5px;"
+        "}"
+        "QPushButton:hover { background: #3a5a7a; }"
+    );
+
+    auto* dOffsetLayout = new QHBoxLayout();
+    dOffsetLayout->setContentsMargins(0, 0, 0, 0);
+    dOffsetLayout->setSpacing(5);
+    dOffsetLayout->addWidget(m_dOffsetSpin);
+    dOffsetLayout->addWidget(m_diamCalibBtn);
 
     m_lOffsetSpin = new QDoubleSpinBox(this);
     m_lOffsetSpin->setRange(-100.0, 100.0);
@@ -107,7 +129,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_pointsPerProfileCombo->addItems({"1280", "640", "320", "160"});
     applySpinStyle(m_pointsPerProfileCombo);
 
-    form->addRow("Lazer Ofseti (Z):", m_dOffsetSpin);
+    form->addRow("Lazer Ofseti (Z):", dOffsetLayout);
     form->addRow("Lateral Ofset (X):", lOffsetLayout);
     form->addRow("AS5600 Çözünürlüğü:", m_as5600ResSpin);
     form->addRow("Step Çözünürlüğü:", m_stepResSpin);
@@ -240,6 +262,79 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     connect(m_readBtn, &QPushButton::clicked, this, &SetupPanel::onReadClicked);
     connect(m_autoCalibBtn, &QPushButton::clicked, this, [this]() {
         if (m_ctrl) m_ctrl->autoCalibrateOffsetAsync();
+    });
+    connect(m_diamCalibBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_ctrl) return;
+
+        // Bilinen cap + z-bandi giris dialogu
+        QDialog dlg(this);
+        dlg.setWindowTitle("Çap Kalibrasyonu (dOffset)");
+        auto* dlgLayout = new QVBoxLayout(&dlg);
+
+        auto* info = new QLabel(
+            "Bilinen çaplı silindirin taramasını aktif katman yapın.\n"
+            "Z bandını silindirin DÜZ gövdesinden seçin (taban geçişinden\n"
+            "ve üst yüzeyden uzak durun).", &dlg);
+        dlgLayout->addWidget(info);
+
+        auto* formL = new QFormLayout();
+        auto* diamSpin = new QDoubleSpinBox(&dlg);
+        diamSpin->setRange(1.0, 300.0);
+        diamSpin->setDecimals(3);
+        diamSpin->setValue(30.0);
+        diamSpin->setSuffix(" mm");
+
+        auto* zMinSpin = new QDoubleSpinBox(&dlg);
+        zMinSpin->setRange(-100.0, 300.0);
+        zMinSpin->setDecimals(1);
+        zMinSpin->setValue(10.0);
+        zMinSpin->setSuffix(" mm");
+
+        auto* zMaxSpin = new QDoubleSpinBox(&dlg);
+        zMaxSpin->setRange(-100.0, 300.0);
+        zMaxSpin->setDecimals(1);
+        zMaxSpin->setValue(20.0);
+        zMaxSpin->setSuffix(" mm");
+
+        formL->addRow("Bilinen çap (kumpas):", diamSpin);
+        formL->addRow("Bant Z min:", zMinSpin);
+        formL->addRow("Bant Z max:", zMaxSpin);
+        dlgLayout->addLayout(formL);
+
+        auto* btnRow = new QHBoxLayout();
+        auto* okBtn = new QPushButton("Hesapla", &dlg);
+        auto* cancelBtn = new QPushButton("İptal", &dlg);
+        okBtn->setDefault(true);
+        btnRow->addStretch();
+        btnRow->addWidget(cancelBtn);
+        btnRow->addWidget(okBtn);
+        dlgLayout->addLayout(btnRow);
+
+        connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+        connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+        if (dlg.exec() == QDialog::Accepted) {
+            m_ctrl->calibrateDiameterAsync(
+                static_cast<float>(diamSpin->value()),
+                static_cast<float>(zMinSpin->value()),
+                static_cast<float>(zMaxSpin->value()));
+        }
+    });
+    connect(m_ctrl, &ScanController::diameterCalibrationFinished, this,
+            [this](bool success, QString report, float suggestedDOffset) {
+        if (!success) {
+            QMessageBox::warning(this, "Çap Kalibrasyonu", report);
+            return;
+        }
+        const auto answer = QMessageBox::question(
+            this, "Çap Kalibrasyonu",
+            report + "\n\nÖnerilen dOffset uygulansın mı?\n"
+                     "(Aktif katman ham veriden yeniden projekte edilir.)",
+            QMessageBox::Yes | QMessageBox::No);
+        if (answer == QMessageBox::Yes) {
+            m_dOffsetSpin->setValue(suggestedDOffset);
+            m_ctrl->setDOffset(suggestedDOffset);
+        }
     });
     connect(m_start3DCalibBtn, &QPushButton::clicked, this, [this]() {
         if (m_ctrl) m_ctrl->start3DCalibrationAsync(m_calibMethodCombo->currentIndex());
