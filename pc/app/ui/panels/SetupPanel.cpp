@@ -245,9 +245,12 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
         if (m_ctrl) m_ctrl->start3DCalibrationAsync(m_calibMethodCombo->currentIndex());
     });
     connect(m_ctrl, &ScanController::autoCalibrationFinished, this, [this](float bestOffset, double score) {
-        QMessageBox::information(this, "Otomatik Kalibrasyon", 
+        QMessageBox::information(this, "Otomatik Kalibrasyon",
             QString("Hesaplama tamamlandi!\n\nBulunan en iyi Lateral Offset: %1 mm\n\nBu deger sisteme uygulandi.").arg(bestOffset));
         m_lOffsetSpin->setValue(bestOffset);
+        // Degeri gercekten uygula: ham verisi olan aktif katman varsa
+        // yeni offset ile otomatik olarak yeniden projekte edilir.
+        m_ctrl->setLateralOffset(bestOffset);
     });
     connect(m_ctrl, &ScanController::calibration3DFinished, this, [this](bool success, QString report) {
         if (success) {

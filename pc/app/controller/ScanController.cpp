@@ -285,7 +285,14 @@ void ScanController::startScan(int direction)
         return;
 
     // ── 1. Tüm eski verileri temizle ────────────────────────────
-    while (!m_encoderAngles.empty()) m_encoderAngles.pop();
+    m_pendingTriggers.clear();
+    m_pendingProfiles.clear();
+    m_rawScanData.clear();
+
+    m_statAngles = m_statProfiles = m_statEmptyProfiles = 0;
+    m_statPaired = m_statSeqGaps = m_statDroppedProfiles = 0;
+    m_hasLastSeq = false;
+    m_lastSeq = 0;
 
     if (m_ring)
         m_ring->clear();
@@ -392,15 +399,39 @@ void ScanController::stopScan()
 
     m_hwAngle = 0.0f;
 
+    // ── Tani raporu: aci/profil sayilari uyusmuyorsa dalgalanmanin ──
+    // ── kaynagi buyuk olasilikla tetik zinciridir; loga dusur.     ──
+    if (m_triggerMode != ScanTriggerMode::TimeBased &&
+        (m_statAngles > 0 || m_statProfiles > 0)) {
+        emit logMessage("SYS",
+            QString("Tarama istatistikleri: aci=%1, profil=%2 (bos=%3), "
+                    "eslesen=%4, seq kaybi=%5, tasma=%6, kuyrukta kalan: aci=%7 profil=%8")
+                .arg(m_statAngles).arg(m_statProfiles).arg(m_statEmptyProfiles)
+                .arg(m_statPaired).arg(m_statSeqGaps).arg(m_statDroppedProfiles)
+                .arg(m_pendingTriggers.size()).arg(m_pendingProfiles.size()));
+
+        if (m_statAngles != m_statProfiles) {
+            emit logMessage("WARN",
+                QString("Aci/profil sayilari esit degil (%1 != %2)! "
+                        "Tetik zincirinde kayip var; yuzey dalgalanmasinin olasi kaynagi.")
+                    .arg(m_statAngles).arg(m_statProfiles));
+        }
+    }
+    m_pendingTriggers.clear();
+    m_pendingProfiles.clear();
+
     emit logMessage("SYS", "Tarama durduruldu — lazer ve tamponlar temizlendi.");
     if (!m_lastCloud.isEmpty()) {
         addNewLayer(m_lastCloud, "Tarama Katmani");
-        // Ham veriyi de originalPoints olarak katmana kaydediyoruz
+        // Ham veriyi de katmana kaydediyoruz: originalPoints (projekte edilmis,
+        // kalibrasyonsuz) + rawProfiles (projeksiyon oncesi aci/profil ciftleri).
         if(m_layers.contains(m_activeLayerId)) {
             m_layers[m_activeLayerId].originalPoints = m_lastCloudRaw;
+            m_layers[m_activeLayerId].rawProfiles = std::move(m_rawScanData);
         }
         m_lastCloud.clear();
         m_lastCloudRaw.clear();
+        m_rawScanData.clear();
     }
     emit scanStopped();
 }
@@ -415,26 +446,37 @@ void ScanController::consumeHardwarePackets()
         return;
 
     // ═══════════════════════════════════════════════════════════════
-    // Enkoder / External Trigger modu
+    // Enkoder / External Trigger modu — FIFO 1:1 eslestirme
+    //
+    // External trigger modunda her donanim tetigi tam olarak 1 profil
+    // (Ethernet/ring buffer) ve 1 aci paketi (seri port) uretir. Iki akis
+    // da kendi icinde siralidir; dogru eslestirme her zaman FIFO birebirdir.
+    //
+    // Eski "akilli eslestirme" iki sekilde veri bozuyordu:
+    //  1. Aci kuyrugu bos oldugunda ring buffer temizleniyordu — seri port
+    //     gecikmesi yuzunden acisi henuz gelmemis GECERLI profiller atiliyor,
+    //     sonraki aci yanlis profile eslesiyordu (birikimli kayma → bulutta
+    //     donmus hayalet kareler / yuzey dalgalanmasi).
+    //  2. Profil fazlasi varsa EN ESKI profiller atlanip EN YENI profiller
+    //     en eski acilara eslesiyordu — zamansal olarak ters.
     // ═══════════════════════════════════════════════════════════════
     if (m_triggerMode != ScanTriggerMode::TimeBased) {
-        static constexpr int MAX_EVENTS = 16;
-        int evtCount = 0;
-        
-        // 1. UDP üzerinden MCU (eski yöntem, varsa)
+
+        // ── 1. Tetik olaylarini oku (UDP + Serial) ──────────────────
         if (m_mcu) {
             McuListener::TriggerEvent evt;
-            while (evtCount < MAX_EVENTS && m_mcu->tryGetTriggerEvent(evt)) {
-                ++evtCount;
+            while (m_mcu->tryGetTriggerEvent(evt)) {
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
-                emit logMessage("MCU", QString("Tetik: seq=%1 aci=%2 deg")
-                    .arg(evt.seq).arg(angleDeg, 0, 'f', 2));
-                m_encoderAngles.push(angleDeg);
+                if (!m_hasStartAngle) {
+                    m_startAngle = angleDeg;
+                    m_hasStartAngle = true;
+                }
+                m_pendingTriggers.push_back({evt.seq, angleDeg});
+                ++m_statAngles;
             }
         }
-        
-        // 2. Serial port üzerinden MCU
+
         if (m_serialReader) {
             // Text mesajlarini oku
             std::string msg;
@@ -443,97 +485,97 @@ void ScanController::consumeHardwarePackets()
             }
 
             SerialTriggerReader::TriggerEvent evt;
-            while (evtCount < MAX_EVENTS && m_serialReader->tryGetTriggerEvent(evt)) {
-                ++evtCount;
+            while (m_serialReader->tryGetTriggerEvent(evt)) {
                 const float angleDeg = static_cast<float>(evt.angle_mdeg) / 1000.0f;
                 emit mcuPacketReceived(evt.seq, angleDeg);
-                
+
+                // Seq surekliligi kontrolu: atlama = seri portta kaybolan paket.
+                // (Eski ciplak-float formatta seq=0 gelir; o durumda kontrol atlanir.)
+                if (evt.seq != 0) {
+                    if (m_hasLastSeq && evt.seq > m_lastSeq + 1) {
+                        m_statSeqGaps += (evt.seq - m_lastSeq - 1);
+                        emit logMessage("WARN",
+                            QString("Tetik paketi kaybi: seq %1 -> %2")
+                                .arg(m_lastSeq).arg(evt.seq));
+                    }
+                    m_lastSeq = evt.seq;
+                    m_hasLastSeq = true;
+                }
+
                 if (!m_hasStartAngle) {
                     m_startAngle = angleDeg;
                     m_hasStartAngle = true;
                 }
-                
-                m_encoderAngles.push(angleDeg);
 
-                // 360 derece (tam tur) tamamlandiysa durdur
-                float sweptAngle = std::abs(angleDeg - m_startAngle);
-                if (sweptAngle >= 359.5f) {
-                    stopScan();
-                    return;
-                }
+                m_pendingTriggers.push_back({evt.seq, angleDeg});
+                ++m_statAngles;
             }
         }
 
-
-        // Lazer bagli degilse profil eslestirme atlaniyor
-        if (!m_ring || !m_laser)
-            return;
-
-        // Akilli eslestirme: Buffer'daki profilleri topla, son N tanesini
-        // N bekleyen aciya dagit. Eski profilleri atla.
-        //
-        // Ornek: 50 profil, 3 aci → profil #48→aci1, #49→aci2, #50→aci3
-        // Bu sayede her aci zamansal olarak en yakin profili alir.
-        {
-            const int numAngles = static_cast<int>(m_encoderAngles.size());
-            if (numAngles == 0) { 
-                // Eger okunmayi bekleyen bir aci yoksa, lazerden gelen surekli profiller
-                // buffer'i doldurup tasirir. Bu nedenle buffer'i temizliyoruz.
-                m_ring->clear();
-                return; 
-            }
-
-            // 1. Ring buffer'i tamamen bosalt, tum profilleri topla
-            std::vector<Packet> allProfiles;
-            allProfiles.reserve(128);
-            {
-                Packet tmp;
-                while (m_ring->try_pop(tmp)) {
-                    allProfiles.push_back(std::move(tmp));
+        // Lazer bagli degilse profil eslestirme yapilamaz; sadece 360 kontrolu
+        if (!m_ring || !m_laser) {
+            if (!m_pendingTriggers.empty()) {
+                const float lastAngle = m_pendingTriggers.back().angleDeg;
+                if (std::abs(lastAngle - m_startAngle) >= 359.5f) {
+                    stopScan();
                 }
             }
+            return;
+        }
 
-            // 2. Gecerli ve hatasiz profilleri ayikla ve donustur
-            std::vector<QVector<QPointF>> validProfiles;
-            validProfiles.reserve(allProfiles.size());
+        // ── 2. Ring buffer'daki TUM profilleri sirayla kuyruga al ───
+        // Donusturulemeyen/bos profil de kuyruga girer (bos QVector olarak):
+        // o profil de bir tetigin sonucudur ve karsiligindaki aciyi tuketmesi
+        // gerekir — aksi halde tum sonraki eslesmeler bir kayar.
+        {
+            Packet pkt;
             static std::vector<double> vX, vZ;
-            
-            for (auto& pkt : allProfiles) {
-                if (!pkt.data.empty() && m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ)) {
+            while (m_ring->try_pop(pkt)) {
+                QVector<QPointF> profile;
+                if (!pkt.data.empty() &&
+                    m_laser->convertProfile(pkt.data.data(), pkt.data.size(), vX, vZ)) {
                     const unsigned int res = m_laser->resolution();
-                    QVector<QPointF> profile;
                     profile.reserve(static_cast<int>(res));
                     for (unsigned int j = 0; j < res; ++j) {
                         if (vX[j] == 0.0 && vZ[j] == 0.0) continue;
                         profile.push_back(QPointF(vX[j], vZ[j]));
                     }
-                    if (!profile.isEmpty()) {
-                        validProfiles.push_back(std::move(profile));
-                    }
                 }
+                if (profile.isEmpty())
+                    ++m_statEmptyProfiles;
+                m_pendingProfiles.push_back(std::move(profile));
+                ++m_statProfiles;
             }
+        }
 
-            const int profileCount = static_cast<int>(validProfiles.size());
-            if (profileCount == 0) { return; }
+        // ── 3. Tasma korumasi ────────────────────────────────────────
+        // Aci paketleri uzun sure gelmezse (seri kopmasi vb.) profil kuyrugu
+        // sinirsiz buyumesin. Atilan her profil sayilir ve raporlanir.
+        while (m_pendingProfiles.size() > 1024) {
+            m_pendingProfiles.pop_front();
+            ++m_statDroppedProfiles;
+        }
+        while (m_pendingTriggers.size() > 4096) {
+            m_pendingTriggers.pop_front();
+        }
 
-            // 3. Kac profili kullanacagimizi hesapla
-            const int usable = (numAngles < profileCount) ? numAngles : profileCount;
-            const int skip   = profileCount - usable;
+        // ── 4. FIFO birebir eslestirme ───────────────────────────────
+        while (!m_pendingTriggers.empty() && !m_pendingProfiles.empty()) {
+            const PendingTrigger trig = m_pendingTriggers.front();
+            m_pendingTriggers.pop_front();
 
-            // 4. Son 'usable' profili, ilk 'usable' aciya esle
-            for (int i = 0; i < usable; ++i) {
-                const auto& profile = validProfiles[skip + i];
-                float angleDeg = m_encoderAngles.front();
-                m_encoderAngles.pop();
+            QVector<QPointF> profile = std::move(m_pendingProfiles.front());
+            m_pendingProfiles.pop_front();
 
-                publishProfileFrame(angleDeg, profile);
+            ++m_statPaired;
 
-                // 360 derece kontrolu
-                float sweptAngle = std::abs(angleDeg - m_startAngle);
-                if (sweptAngle >= 359.5f) {
-                    stopScan();
-                    return;
-                }
+            if (!profile.isEmpty())
+                publishProfileFrame(trig.angleDeg, profile);
+
+            // 360 derece (tam tur) kontrolu
+            if (std::abs(trig.angleDeg - m_startAngle) >= 359.5f) {
+                stopScan();
+                return;
             }
         }
         return;
@@ -606,23 +648,16 @@ void ScanController::onEncoderTrigger(float angleDeg)
     // Artik queue üzerinden eslestirme yapiliyor.
 }
 
-void ScanController::publishProfileFrame(float thetaDeg, const QVector<QPointF>& profile)
+void ScanController::projectProfileInto(float thetaDeg,
+                                        const QVector<QPointF>& profile,
+                                        QVector<QVector3D>& out) const
 {
-    if (profile.isEmpty())
-        return;
-
-    ScanProfileFrame frame;
-    frame.profile = profile;
-    frame.thetaDegree = thetaDeg;
-    frame.layerIndex = 0;
-    frame.direction = ScanDirection::Clockwise;
-
-    float theta_rad = thetaDeg * (3.14159265359f / 180.0f);
-    float cosA = std::cos(theta_rad);
-    float sinA = std::sin(theta_rad);
-    float tableZ = m_dOffset;
-    float zOffset = 3.5f;
-    float lateralOffset = m_lOffset;
+    const float theta_rad = thetaDeg * (3.14159265359f / 180.0f);
+    const float cosA = std::cos(theta_rad);
+    const float sinA = std::sin(theta_rad);
+    const float tableZ = m_dOffset;
+    const float zOffset = 3.5f;
+    const float lateralOffset = m_lOffset;
 
     for (const auto& p : profile) {
         float z = p.x() - zOffset;
@@ -630,18 +665,87 @@ void ScanController::publishProfileFrame(float thetaDeg, const QVector<QPointF>&
         if (std::abs(r) < 0.05f) continue;
         float X = r * cosA - lateralOffset * sinA;
         float Y = r * sinA + lateralOffset * cosA;
-        QVector3D p3d(X, Y, z);
+        out.push_back(QVector3D(X, Y, z));
+    }
+}
+
+void ScanController::publishProfileFrame(float thetaDeg, const QVector<QPointF>& profile)
+{
+    if (profile.isEmpty())
+        return;
+
+    // Ham (aci, profil) ciftini sakla: offset/kalibrasyon sonradan degisirse
+    // bulut bu veriden yeniden projekte edilir (yeniden tarama gerekmez).
+    if (m_scanning) {
+        RawProfileSample sample;
+        sample.thetaDegree = thetaDeg;
+        sample.profile = profile;
+        m_rawScanData.push_back(std::move(sample));
+    }
+
+    ScanProfileFrame frame;
+    frame.profile = profile;
+    frame.thetaDegree = thetaDeg;
+    frame.layerIndex = 0;
+    frame.direction = ScanDirection::Clockwise;
+
+    QVector<QVector3D> rawPoints;
+    rawPoints.reserve(profile.size());
+    projectProfileInto(thetaDeg, profile, rawPoints);
+
+    const bool calibrated = (m_calibrator && m_calibrator->isCalibrated());
+    for (const auto& p3d : rawPoints) {
         m_lastCloudRaw.push_back(p3d);
-        
-        if (m_calibrator && m_calibrator->isCalibrated()) {
-            p3d = m_calibrator->applyTransform(p3d);
-        }
-        
-        m_lastCloud.push_back(p3d);
+        m_lastCloud.push_back(calibrated ? m_calibrator->applyTransform(p3d) : p3d);
     }
 
     emit profileFrameReceived(frame);
     emit simProfileReceived(thetaDeg, profile);
+}
+
+void ScanController::reprojectActiveLayerFromRaw()
+{
+    if (m_activeLayerId == -1 || !m_layers.contains(m_activeLayerId))
+        return;
+
+    auto& layer = m_layers[m_activeLayerId];
+    if (layer.rawProfiles.isEmpty())
+        return;
+
+    QVector<QVector3D> rawPoints;
+    for (const auto& sample : layer.rawProfiles) {
+        projectProfileInto(sample.thetaDegree, sample.profile, rawPoints);
+    }
+
+    // Katmana onceden verilmis Z kaydirmasini koru
+    if (layer.zOffsetMm != 0.0f) {
+        for (auto& p : rawPoints) {
+            p.setZ(p.z() + layer.zOffsetMm);
+        }
+    }
+
+    layer.originalPoints = rawPoints;
+
+    if (m_calibrator && m_calibrator->isCalibrated()) {
+        layer.points.clear();
+        layer.points.reserve(rawPoints.size());
+        for (const auto& p : rawPoints) {
+            layer.points.push_back(m_calibrator->applyTransform(p));
+        }
+    } else {
+        layer.points = rawPoints;
+    }
+
+    // Filtre gecmisi eski projeksiyona ait oldugu icin gecersiz
+    layer.history.clear();
+    emit historySizeChanged(0);
+
+    emit layersUpdated();
+    emit pointCloudReady(layer.points);
+    emit logMessage("SYS",
+        QString("Katman ham veriden yeniden projekte edildi (dOffset=%1, lateral=%2). "
+                "Uygulanmis filtreler sifirlandi.")
+            .arg(m_dOffset, 0, 'f', 2).arg(m_lOffset, 0, 'f', 2));
 }
 
 void ScanController::saveCurrentScan(const QString& path)
@@ -655,20 +759,30 @@ void ScanController::saveCurrentScan(const QString& path)
 
 void ScanController::setDOffset(float mm)
 {
+    const bool changed = (m_dOffset != mm);
     m_dOffset = mm;
     emit logMessage("SYS", QString("D offset guncellendi: %1 mm").arg(m_dOffset, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
+
+    // Yeni offset, aktif katmana ham veriden yeniden projeksiyon ile yansir
+    if (changed && !m_scanning)
+        reprojectActiveLayerFromRaw();
 }
 
 void ScanController::setLateralOffset(float mm)
 {
+    const bool changed = (m_lOffset != mm);
     m_lOffset = mm;
     emit logMessage("SYS", QString("Lateral offset guncellendi: %1 mm").arg(m_lOffset, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
+
+    // Yeni offset, aktif katmana ham veriden yeniden projeksiyon ile yansir
+    if (changed && !m_scanning)
+        reprojectActiveLayerFromRaw();
 }
 
 void ScanController::setAs5600Resolution(float val)
@@ -1291,26 +1405,51 @@ void ScanController::cancelManualAlignment()
 
 void ScanController::autoCalibrateOffsetAsync()
 {
-    QVector<QVector3D> cloudCopy;
-
-    if (!m_lastCloud.isEmpty()) {
-        cloudCopy = m_lastCloud;
-    } else if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
-        cloudCopy = m_layers[m_activeLayerId].points;
+    // 1. Tercih: ham (aci, profil) verisi — dogrudan projeksiyonla kesin arama.
+    QVector<RawProfileSample> rawCopy;
+    if (!m_rawScanData.isEmpty()) {
+        rawCopy = m_rawScanData;
+    } else if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)
+               && !m_layers[m_activeLayerId].rawProfiles.isEmpty()) {
+        rawCopy = m_layers[m_activeLayerId].rawProfiles;
     }
 
-    if (cloudCopy.isEmpty()) {
+    // 2. Fallback: ham veri yoksa KALIBRE EDILMEMIS bulut uzerinden eski yontem.
+    //    (m_lastCloud kalibre edilmis olabilir; geri-hesaplama ham projeksiyon
+    //    varsayimina dayandigi icin kalibre bulutla yanlis sonuc verir.)
+    QVector<QVector3D> cloudCopy;
+    if (rawCopy.isEmpty()) {
+        if (!m_lastCloudRaw.isEmpty()) {
+            cloudCopy = m_lastCloudRaw;
+        } else if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
+            cloudCopy = m_layers[m_activeLayerId].originalPoints;
+        }
+    }
+
+    if (rawCopy.isEmpty() && cloudCopy.isEmpty()) {
         emit logMessage("WRN", "Otomatik kalibrasyon icin aktif taranmis veri veya secili bir katman bulunamadi.");
         return;
     }
 
     emit processingStarted("Otomatik Offset Hesaplaniyor");
 
-    float currentOffset = m_lOffset;
+    const float currentOffset = m_lOffset;
+    const float dOffset = m_dOffset;
+    const bool useRaw = !rawCopy.isEmpty();
 
-    auto future = QtConcurrent::run([cloudCopy, currentOffset]() -> AutoCalibResult {
-        return CalibrationEngine::findOptimalLateralOffset(cloudCopy, currentOffset, -2.0f, 2.0f, 0.05f);
-    });
+    emit logMessage("SYS", useRaw
+        ? "Offset aramasi ham (aci+profil) verisi uzerinden yapiliyor."
+        : "Ham veri yok; offset aramasi projekte edilmis bulut uzerinden yapiliyor (daha az kesin).");
+
+    auto future = QtConcurrent::run(
+        [rawCopy, cloudCopy, currentOffset, dOffset, useRaw]() -> AutoCalibResult {
+            if (useRaw) {
+                return CalibrationEngine::findOptimalLateralOffsetFromRaw(
+                    rawCopy, dOffset, -2.0f, 2.0f, 0.05f);
+            }
+            return CalibrationEngine::findOptimalLateralOffset(
+                cloudCopy, currentOffset, -2.0f, 2.0f, 0.05f);
+        });
 
     auto watcher = new QFutureWatcher<AutoCalibResult>(this);
     connect(watcher, &QFutureWatcher<AutoCalibResult>::finished, this, [this, watcher]() {

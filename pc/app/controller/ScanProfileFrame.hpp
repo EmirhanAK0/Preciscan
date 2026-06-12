@@ -24,3 +24,13 @@ struct ScanProfileFrame
     int layerIndex = 0;          ///< Katman numarası (multi-layer tarama için)
     ScanDirection direction = ScanDirection::Clockwise;
 };
+
+/// Ham tarama ornegi: projeksiyon ONCESI (aci, profil) cifti.
+/// Nokta bulutu bu veriden uretildigi icin, dOffset/lateral offset gibi
+/// projeksiyon parametreleri sonradan degistiginde bulut yeniden
+/// projeksiyonla kurtarilabilir (yeniden tarama gerekmez).
+struct RawProfileSample
+{
+    float thetaDegree = 0.0f;     ///< Tetik anindaki tabla acisi (derece)
+    QVector<QPointF> profile;     ///< Lazer profil noktalari (X, Z) — sensor duzleminde
+};

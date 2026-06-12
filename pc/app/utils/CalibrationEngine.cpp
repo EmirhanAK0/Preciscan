@@ -8,6 +8,47 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace {
+
+// Hough parametreleri — iki arama fonksiyonu da ayni skoru kullanir
+constexpr int   kNumAngles = 180;
+constexpr float kRhoMin    = -300.0f;
+constexpr float kRhoMax    = 300.0f;
+constexpr int   kNumRhos   = 600; // 1 mm cozunurluk
+
+// XY noktalarinin "duz cizgililik" skoru: Hough akumulatorundeki
+// degerlerin kareler toplami. Keskin pikler (duz kenarlar) yuksek,
+// dagilmis (egri/dalgali) dagilimlar dusuk skor uretir.
+double houghStraightnessScore(const std::vector<std::pair<float, float>>& ptsXY,
+                              const std::vector<float>& cosTable,
+                              const std::vector<float>& sinTable)
+{
+    const float rhoStep = (kRhoMax - kRhoMin) / kNumRhos;
+    std::vector<int> accum(kNumAngles * kNumRhos, 0);
+
+    for (const auto& pt : ptsXY) {
+        for (int a = 0; a < kNumAngles; ++a) {
+            float rho = pt.first * cosTable[a] + pt.second * sinTable[a];
+            if (rho >= kRhoMin && rho < kRhoMax) {
+                int rBin = static_cast<int>((rho - kRhoMin) / rhoStep);
+                if (rBin >= 0 && rBin < kNumRhos) {
+                    accum[a * kNumRhos + rBin]++;
+                }
+            }
+        }
+    }
+
+    double score = 0.0;
+    for (int v : accum) {
+        if (v > 10) { // kucuk gurultu tabani esigi
+            score += static_cast<double>(v) * v;
+        }
+    }
+    return score;
+}
+
+} // namespace
+
 AutoCalibResult CalibrationEngine::findOptimalLateralOffset(
     const QVector<QVector3D>& cloud,
     float currentLateralOffset,
@@ -107,6 +148,92 @@ AutoCalibResult CalibrationEngine::findOptimalLateralOffset(
 
         if (currentScore > result.maxScore) {
             result.maxScore = currentScore;
+            result.bestLateralOffset = testOffset;
+            result.success = true;
+        }
+    }
+
+    return result;
+}
+
+AutoCalibResult CalibrationEngine::findOptimalLateralOffsetFromRaw(
+    const QVector<RawProfileSample>& rawProfiles,
+    float dOffsetMm,
+    float minOffset,
+    float maxOffset,
+    float step)
+{
+    AutoCalibResult result;
+    result.success = false;
+    result.bestLateralOffset = 0.0f;
+    result.maxScore = -1.0;
+
+    if (rawProfiles.isEmpty()) {
+        return result;
+    }
+
+    // 1. (r, cosA, sinA) uclularini cikar — projeksiyonun offsetten
+    //    bagimsiz kismi. Her test offseti icin sadece X,Y yeniden kurulur.
+    struct RT { float r; float cosA; float sinA; };
+    std::vector<RT> rts;
+    {
+        size_t total = 0;
+        for (const auto& s : rawProfiles) total += s.profile.size();
+        rts.reserve(total);
+
+        for (const auto& s : rawProfiles) {
+            const float theta_rad = s.thetaDegree * (float)(M_PI / 180.0);
+            const float cosA = std::cos(theta_rad);
+            const float sinA = std::sin(theta_rad);
+            for (const auto& p : s.profile) {
+                const float r = dOffsetMm - (float)p.y();
+                if (std::abs(r) < 0.05f) continue;
+                // Tabladan cok uzak arka plan noktalarini ele (gurultu)
+                if (std::abs(r) > 60.0f) continue;
+                rts.push_back({r, cosA, sinA});
+            }
+        }
+    }
+
+    if (rts.size() < 100) {
+        return result;
+    }
+
+    // 2. Performans icin altornekle
+    const size_t MAX_POINTS = 30000;
+    if (rts.size() > MAX_POINTS) {
+        std::vector<RT> sampled;
+        sampled.reserve(MAX_POINTS);
+        const size_t stride = rts.size() / MAX_POINTS;
+        for (size_t i = 0; i < rts.size(); i += stride) {
+            sampled.push_back(rts[i]);
+            if (sampled.size() >= MAX_POINTS) break;
+        }
+        rts.swap(sampled);
+    }
+
+    // 3. Hough tablolari
+    std::vector<float> cosTable(kNumAngles), sinTable(kNumAngles);
+    for (int a = 0; a < kNumAngles; ++a) {
+        float phi = a * (float)(M_PI / 180.0);
+        cosTable[a] = std::cos(phi);
+        sinTable[a] = std::sin(phi);
+    }
+
+    // 4. Her test offsetini DOGRUDAN projeksiyonla dene
+    std::vector<std::pair<float, float>> ptsXY;
+    ptsXY.resize(rts.size());
+
+    for (float testOffset = minOffset; testOffset <= maxOffset; testOffset += step) {
+        for (size_t i = 0; i < rts.size(); ++i) {
+            const RT& rt = rts[i];
+            ptsXY[i].first  = rt.r * rt.cosA - testOffset * rt.sinA;
+            ptsXY[i].second = rt.r * rt.sinA + testOffset * rt.cosA;
+        }
+
+        const double score = houghStraightnessScore(ptsXY, cosTable, sinTable);
+        if (score > result.maxScore) {
+            result.maxScore = score;
             result.bestLateralOffset = testOffset;
             result.success = true;
         }

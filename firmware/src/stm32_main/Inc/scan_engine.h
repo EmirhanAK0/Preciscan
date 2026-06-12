@@ -14,6 +14,8 @@ typedef struct {
     float next_trigger_angle;    // Bir sonraki lazer tetik acisi
     float angle_per_trigger;     // Derece cinsinden tetik periyodu
     uint8_t trigger_src;         // 0: AS5600, 1: Step
+    uint32_t seq;                // Tetik sira numarasi (tarama basinda sifirlanir)
+    uint32_t session_id;         // Her scan_start'ta artar; PC eski/yeni tarama ayirt eder
     bool  direction;             // true = CW, false = CCW
     bool  running;
 } ScanEngine;

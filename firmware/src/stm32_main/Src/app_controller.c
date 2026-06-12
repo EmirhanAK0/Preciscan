@@ -83,7 +83,18 @@ void app_update(AppController* app, uint32_t now_ms, uint32_t now_us) {
     if (app->state == SYS_SCANNING) {
         float angle;
         if (scan_update(&app->scanner, now_us, &angle)) {
-            uart_comm_print_float("", angle, 2); // Aciyi PC'ye gonder
+            /* Seq'li tetik paketi: "T,session,seq,enc_count,angle_mdeg,tick_us"
+               PC tarafi seq ile kayip tetik tespiti ve FIFO 1:1 profil-aci
+               eslestirmesi yapar (ciplak float formati sira bilgisi tasimiyordu). */
+            char tbuf[64];
+            int32_t mdeg = (int32_t)(angle * 1000.0f);
+            snprintf(tbuf, sizeof(tbuf), "T,%lu,%lu,%ld,%ld,%lu",
+                     (unsigned long)app->scanner.session_id,
+                     (unsigned long)app->scanner.seq,
+                     (long)encoder_get_counts(),
+                     (long)mdeg,
+                     (unsigned long)now_us);
+            uart_comm_println(tbuf);
         }
         
         // 360 derece donup otomatik durduysa:

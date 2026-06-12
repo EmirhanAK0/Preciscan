@@ -42,4 +42,7 @@ static const bool CFG_Z_HOME_DIR      = true;
 
 // ---- Debounce & Lazer ----
 static const uint32_t CFG_DEBOUNCE_MS    = 200UL;
-static const uint32_t CFG_LASER_PULSE_US = 2000UL;
+// Tetik pulse genisligi: scanCONTROL yukselen kenari algilar; pulse ne kadar
+// uzun olursa ardisik iki tetik arasinda kenar olusmama (yutulma) riski o kadar
+// artar. 100us TTL girisi icin fazlasiyla yeterli.
+static const uint32_t CFG_LASER_PULSE_US = 100UL;

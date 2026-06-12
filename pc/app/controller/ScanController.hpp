@@ -7,6 +7,7 @@
 #include <QVector>
 #include <QVector3D>
 #include <queue>
+#include <deque>
 #include <atomic>
 #include <QFutureWatcher>
 #include <QFuture>
@@ -23,6 +24,9 @@ struct ScanLayerData {
     QVector<QVector3D> points;
     QVector<QVector3D> originalPoints;
     QVector<QVector<QVector3D>> history;
+    /// Projeksiyon oncesi ham (aci, profil) verisi. Offset/kalibrasyon
+    /// degisince katman bu veriden yeniden projekte edilir.
+    QVector<RawProfileSample> rawProfiles;
     float              zOffsetMm = 0.0f;
 };
 
@@ -192,6 +196,15 @@ private:
     bool validateLaserTiming(QString* errorMsg = nullptr) const;
     void publishProfileFrame(float thetaDeg, const QVector<QPointF>& profile);
 
+    /// Tek profili mevcut dOffset/lateral offset ile 3D'ye projekte eder
+    /// (kalibrasyonsuz ham noktalar 'out'a eklenir).
+    void projectProfileInto(float thetaDeg, const QVector<QPointF>& profile,
+                            QVector<QVector3D>& out) const;
+
+    /// Aktif katmani ham (aci, profil) verisinden yeniden projekte eder.
+    /// Offset degisikliklerinin yeniden tarama gerektirmemesini saglar.
+    void reprojectActiveLayerFromRaw();
+
 private:
     McuListener* m_mcu = nullptr;
     LaserManager* m_laser = nullptr;
@@ -220,7 +233,30 @@ private:
 
     QTimer* m_hwTimer{nullptr};
     float m_hwAngle{0.0f};
-    std::queue<float> m_encoderAngles;
+
+    /// Bekleyen tetik olayi (MCU'dan gelen seq + aci).
+    struct PendingTrigger {
+        quint32 seq;
+        float angleDeg;
+    };
+
+    /// FIFO eslestirme kuyruklari: her donanim tetigi tam olarak
+    /// 1 aci paketi + 1 lazer profili uretir; sirayla birebir eslesirler.
+    std::deque<PendingTrigger> m_pendingTriggers;
+    std::deque<QVector<QPointF>> m_pendingProfiles;
+
+    /// Devam eden taramanin ham (aci, profil) kayitlari.
+    QVector<RawProfileSample> m_rawScanData;
+
+    // Tani sayaclari (tarama sonunda raporlanir)
+    quint32 m_statAngles{0};          ///< Alinan tetik/aci paketi sayisi
+    quint32 m_statProfiles{0};        ///< Lazerden alinan profil sayisi
+    quint32 m_statEmptyProfiles{0};   ///< Bos/donusturulemeyen profil sayisi
+    quint32 m_statPaired{0};          ///< Eslestirilen (aci, profil) cifti
+    quint32 m_statSeqGaps{0};         ///< Seri portta kaybolan tetik paketi
+    quint32 m_statDroppedProfiles{0}; ///< Tasma nedeniyle atilan profil
+    quint32 m_lastSeq{0};
+    bool m_hasLastSeq{false};
 
     ScanTriggerMode m_triggerMode{ScanTriggerMode::Encoder};
     TriggerSource m_triggerSource{TriggerSource::AS5600};

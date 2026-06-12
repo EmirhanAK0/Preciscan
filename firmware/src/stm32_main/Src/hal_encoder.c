@@ -146,6 +146,10 @@ float encoder_get_angle(void) {
     return (float)enc_counts * (360.0f / 4096.0f);
 }
 
+int32_t encoder_get_counts(void) {
+    return enc_counts;
+}
+
 void encoder_reset(void) {
     enc_counts = 0;
 }
