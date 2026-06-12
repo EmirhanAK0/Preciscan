@@ -50,7 +50,7 @@ void LaserSimWorker::run()
         current_angle += angle_step;
 
         float total_steps = 360.0f / angle_step;
-        int delay_ms      = static_cast<int>((1000.0f / m_params.rps) / total_steps);
+        int delay_ms      = static_cast<int>((m_params.sec_per_rev * 1000.0f) / total_steps);
         int sleep_time    = delay_ms - (int)timer.elapsed();
         if (sleep_time > 0)
             msleep(sleep_time);

@@ -256,6 +256,25 @@ static void process_command(AppController* app, const char* cmd) {
     else if (strcmp(cmd, "RESET") == 0) {
         start_lin_homing(app);
     }
+    else if (strncmp(cmd, "SPEED:", 6) == 0) {
+        uint32_t us = (uint32_t)atoi(cmd + 6);
+        if (us > 0) {
+            stepper_set_interval(&app->scanner.rot_motor, us);
+            uart_comm_println("STATUS:SPEED_UPDATED");
+        }
+    }
+    else if (strncmp(cmd, "RES:", 4) == 0) {
+        float res = (float)atof(cmd + 4);
+        if (res > 0.0f) {
+            app->scanner.angle_per_trigger = res;
+            uart_comm_println("STATUS:RES_UPDATED");
+        }
+    }
+    else if (strncmp(cmd, "TRIG_SRC:", 9) == 0) {
+        int src = atoi(cmd + 9);
+        app->scanner.trigger_src = (uint8_t)src;
+        uart_comm_println("STATUS:TRIG_SRC_UPDATED");
+    }
     else if (strcmp(cmd, "STATUS") == 0) {
         char buf[64];
         // STATE numarasini ve kalan adimlari STATUS: onekiyle bildir

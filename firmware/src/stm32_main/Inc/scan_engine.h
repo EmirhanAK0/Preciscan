@@ -13,6 +13,7 @@ typedef struct {
     float scan_start_angle;      // Tarama baslangicindaki mutlak aci (360 derece durmasi icin)
     float next_trigger_angle;    // Bir sonraki lazer tetik acisi
     float angle_per_trigger;     // Derece cinsinden tetik periyodu
+    uint8_t trigger_src;         // 0: AS5600, 1: Step
     bool  direction;             // true = CW, false = CCW
     bool  running;
 } ScanEngine;

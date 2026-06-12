@@ -310,6 +310,7 @@ C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ pr
   C:/Qt/6.10.1/msvc2022_64/include/QtCore/qxpfunctional.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtCore/qxptype_traits.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtCore/qyieldcpu.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/QMatrix4x4 \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/QVector3D \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qaction.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qbitmap.h \
@@ -320,9 +321,11 @@ C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ pr
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qfontinfo.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qfontmetrics.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qfontvariableaxis.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qgenericmatrix.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qicon.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qimage.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qkeysequence.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qmatrix4x4.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qpaintdevice.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qpalette.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qpixelformat.h \
@@ -335,6 +338,8 @@ C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ pr
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qtguiexports.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qtguiglobal.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qtransform.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qvector3d.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qvector4d.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qvectornd.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qwindowdefs.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qwindowdefs_win.h \
@@ -346,4 +351,5 @@ C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ pr
   C:/Qt/6.10.1/msvc2022_64/include/QtWidgets/qwidget.h \
   C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/app/controller/ScanController.hpp \
   C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/app/controller/ScanProfileFrame.hpp \
+  C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/app/utils/AutoCalibrator.h \
   C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/io/serial_trigger_reader.h

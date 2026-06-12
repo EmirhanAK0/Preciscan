@@ -14,4 +14,5 @@
 #include <6BV5VGF5IY/moc_ProfileWidget.cpp>
 #include <6BV5VGF5IY/moc_SpeedControl.cpp>
 #include <6BV5VGF5IY/moc_VisualizerWidget.cpp>
+#include <K5Y463TQDB/moc_AutoCalibrator.cpp>
 #include <ZPZSCMKBGY/moc_laser_sim_worker.cpp>

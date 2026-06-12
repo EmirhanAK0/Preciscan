@@ -15,6 +15,7 @@ void scan_start(ScanEngine* eng, bool cw) {
     eng->running          = true;
     eng->direction        = cw;
     eng->scan_start_angle = encoder_get_angle();
+    stepper_reset_count(&eng->rot_motor);
     
     if (cw) {
         eng->next_trigger_angle = eng->scan_start_angle + eng->angle_per_trigger;
@@ -37,7 +38,12 @@ bool scan_update(ScanEngine* eng, uint32_t now_us, float* angle_out) {
 
     stepper_update(&eng->rot_motor, now_us);
 
-    float current_angle = encoder_get_angle();
+    float current_angle;
+    if (eng->trigger_src == 1) {
+        current_angle = eng->scan_start_angle + (eng->rot_motor.step_count * CFG_ROT_DEG_PER_STEP);
+    } else {
+        current_angle = encoder_get_angle();
+    }
 
     static uint32_t last_dbg_us = 0;
     if (now_us - last_dbg_us >= 500000) { // 500ms'de bir logla

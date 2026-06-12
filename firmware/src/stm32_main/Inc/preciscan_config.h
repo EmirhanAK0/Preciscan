@@ -8,7 +8,7 @@
 
 // ---- Motor Adim Zamanlama (mikrosaniye / adim) ----
 static const uint32_t CFG_LIN_STEP_US     = 200UL;
-static const uint32_t CFG_ROT_STEP_US     = 50000UL;   // 50ms/adim
+static const uint32_t CFG_ROT_STEP_US     = 150000UL;  // 150ms/adim (Cok yavas, yuksek pozlama icin)
 static const uint32_t CFG_Z_STEP_US       = 800UL;
 static const uint32_t CFG_Z_HOME_STEP_US  = 1200UL;
 

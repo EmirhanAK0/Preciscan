@@ -12,6 +12,9 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QInputDialog>
+#include <QDir>
+#include "../../utils/AutoCalibrator.h"
 
 #include "../../controller/ScanController.hpp"
 
@@ -55,32 +58,46 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_lOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_lOffsetSpin);
 
-    m_resSpin = new QDoubleSpinBox(this);
-    m_resSpin->setRange(0.01, 10.0);
-    m_resSpin->setDecimals(2);
-    m_resSpin->setSingleStep(0.25);
-    m_resSpin->setValue(1.0);
-    m_resSpin->setSuffix(" deg");
-    applySpinStyle(m_resSpin);
+    m_autoCalibBtn = new QPushButton("Oto. Bul", this);
+    m_autoCalibBtn->setToolTip("Son taramayi baz alip en iyi lateral offseti otomatik hesaplar.");
+    m_autoCalibBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #2a4a6a;"
+        "  color: white;"
+        "  border: 1px solid #3a5a7a;"
+        "  border-radius: 4px;"
+        "  padding: 2px 5px;"
+        "}"
+        "QPushButton:hover { background: #3a5a7a; }"
+    );
+    
+    auto* lOffsetLayout = new QHBoxLayout();
+    lOffsetLayout->setContentsMargins(0, 0, 0, 0);
+    lOffsetLayout->setSpacing(5);
+    lOffsetLayout->addWidget(m_lOffsetSpin);
+    lOffsetLayout->addWidget(m_autoCalibBtn);
+
+    m_as5600ResSpin = new QDoubleSpinBox(this);
+    m_as5600ResSpin->setRange(0.01, 10.0);
+    m_as5600ResSpin->setDecimals(2);
+    m_as5600ResSpin->setSingleStep(0.25);
+    m_as5600ResSpin->setValue(1.0);
+    m_as5600ResSpin->setSuffix(" deg");
+    applySpinStyle(m_as5600ResSpin);
+
+    m_stepResSpin = new QDoubleSpinBox(this);
+    m_stepResSpin->setRange(0.01, 10.0);
+    m_stepResSpin->setDecimals(2);
+    m_stepResSpin->setSingleStep(0.25);
+    m_stepResSpin->setValue(1.0);
+    m_stepResSpin->setSuffix(" deg");
+    applySpinStyle(m_stepResSpin);
 
     m_profileRateSpin = new QSpinBox(this);
     m_profileRateSpin->setRange(1, 2000);
     m_profileRateSpin->setValue(100);
     m_profileRateSpin->setSuffix(" Hz");
     applySpinStyle(m_profileRateSpin);
-
-    m_shutterSpin = new QSpinBox(this);
-    m_shutterSpin->setRange(10, 10000);
-    m_shutterSpin->setValue(100);
-    m_shutterSpin->setSuffix(" us");
-    applySpinStyle(m_shutterSpin);
-
-    m_autoShutterCheck = new QCheckBox("Otomatik Pozlama", this);
-    m_autoShutterCheck->setChecked(true);
-    m_autoShutterCheck->setStyleSheet(
-        "QCheckBox { color: #ccc; spacing: 8px; }"
-        "QCheckBox::indicator { width: 16px; height: 16px; }"
-    );
 
     m_measuringFieldCombo = new QComboBox(this);
     m_measuringFieldCombo->addItems({"large", "standard", "small"});
@@ -91,11 +108,10 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     applySpinStyle(m_pointsPerProfileCombo);
 
     form->addRow("Lazer Ofseti (Z):", m_dOffsetSpin);
-    form->addRow("Lateral Ofset (X):", m_lOffsetSpin);
-    form->addRow("Tarama Cozunurlugu:", m_resSpin);
-    form->addRow("Profiller / saniye:", m_profileRateSpin);
-    form->addRow("Pozlama / Shutter:", m_shutterSpin);
-    form->addRow("", m_autoShutterCheck);
+    form->addRow("Lateral Ofset (X):", lOffsetLayout);
+    form->addRow("AS5600 Çözünürlüğü:", m_as5600ResSpin);
+    form->addRow("Step Çözünürlüğü:", m_stepResSpin);
+    form->addRow("Profil Hızı (Hz):", m_profileRateSpin);
     form->addRow("Olcum Alani:", m_measuringFieldCombo);
     form->addRow("Profil Nokta Sayisi:", m_pointsPerProfileCombo);
 
@@ -129,11 +145,6 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
         "}"
     );
 
-    auto* buttonRow = new QHBoxLayout();
-    buttonRow->setSpacing(8);
-    buttonRow->addWidget(m_readBtn);
-    buttonRow->addWidget(m_applyBtn);
-
     layout->addWidget(group);
 
     // ── Tetik Modu ──────────────────────────────────────────────
@@ -153,8 +164,16 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     trigForm->setHorizontalSpacing(14);
     trigForm->setVerticalSpacing(10);
 
+    m_triggerSourceCombo = new QComboBox(this);
+    m_triggerSourceCombo->addItem("AS5600 (Manyetik Enkoder)",
+                                  QVariant::fromValue(static_cast<int>(TriggerSource::AS5600)));
+    m_triggerSourceCombo->addItem("Step Açısı (Motor Adımı)",
+                                  QVariant::fromValue(static_cast<int>(TriggerSource::StepAngle)));
+    m_triggerSourceCombo->setCurrentIndex(0); // Default to AS5600
+    applySpinStyle(m_triggerSourceCombo);
+
     m_triggerModeCombo = new QComboBox(this);
-    m_triggerModeCombo->addItem("Time-Based (Zamanlay\u0131c\u0131)",
+    m_triggerModeCombo->addItem("Time-Based (Zamanlayıcı)",
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::TimeBased)));
     m_triggerModeCombo->addItem("Encoder Trigger (Enkoder)",
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::Encoder)));
@@ -172,15 +191,114 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
         this);
     trigInfoLabel->setWordWrap(true);
 
+    trigForm->addRow("Kaynak:", m_triggerSourceCombo);
     trigForm->addRow("Mod:", m_triggerModeCombo);
     trigForm->addRow(trigInfoLabel);
 
     layout->addWidget(trigGroup);
+
+    // --- KALİBRASYON YÖNETİMİ GRUBU ---
+    QGroupBox* calibGroup = new QGroupBox("3D Kalibrasyon Yönetimi", this);
+    QVBoxLayout* calibLayout = new QVBoxLayout(calibGroup);
+
+    m_calibMethodCombo = new QComboBox(this);
+    m_calibMethodCombo->addItem("Yöntem: PCL (Yüzey Taraması)", 0);
+    m_calibMethodCombo->addItem("Yöntem: Matematiksel (PCA)", 1);
+    m_calibMethodCombo->setCurrentIndex(1); // Varsayılan Matematiksel (PCA)
+    
+    m_start3DCalibBtn = new QPushButton("Yeni 3D Kalibrasyon Başlat", this);
+    m_start3DCalibBtn->setStyleSheet("background-color: #8B0000; color: white; font-weight: bold;");
+
+    QHBoxLayout* calibControlLayout = new QHBoxLayout();
+    m_calibProfileCombo = new QComboBox(this);
+    m_loadCalibBtn = new QPushButton("Uygula", this);
+    m_clearCalibBtn = new QPushButton("Sıfırla/Kapat", this);
+    
+    calibControlLayout->addWidget(m_calibProfileCombo, 1);
+    calibControlLayout->addWidget(m_loadCalibBtn);
+    calibControlLayout->addWidget(m_clearCalibBtn);
+
+    m_saveAsCalibBtn = new QPushButton("Farklı Kaydet...", this);
+
+    calibLayout->addWidget(m_calibMethodCombo);
+    calibLayout->addWidget(m_start3DCalibBtn);
+    calibLayout->addLayout(calibControlLayout);
+    calibLayout->addWidget(m_saveAsCalibBtn);
+    
+    layout->addWidget(calibGroup);
+    // ----------------------------------
+
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->setSpacing(8);
+    buttonRow->addStretch();
+    buttonRow->addWidget(m_readBtn);
+    buttonRow->addWidget(m_applyBtn);
     layout->addLayout(buttonRow);
     layout->addStretch();
 
     connect(m_applyBtn, &QPushButton::clicked, this, &SetupPanel::onApplyClicked);
     connect(m_readBtn, &QPushButton::clicked, this, &SetupPanel::onReadClicked);
+    connect(m_autoCalibBtn, &QPushButton::clicked, this, [this]() {
+        if (m_ctrl) m_ctrl->autoCalibrateOffsetAsync();
+    });
+    connect(m_start3DCalibBtn, &QPushButton::clicked, this, [this]() {
+        if (m_ctrl) m_ctrl->start3DCalibrationAsync(m_calibMethodCombo->currentIndex());
+    });
+    connect(m_ctrl, &ScanController::autoCalibrationFinished, this, [this](float bestOffset, double score) {
+        QMessageBox::information(this, "Otomatik Kalibrasyon", 
+            QString("Hesaplama tamamlandi!\n\nBulunan en iyi Lateral Offset: %1 mm\n\nBu deger sisteme uygulandi.").arg(bestOffset));
+        m_lOffsetSpin->setValue(bestOffset);
+    });
+    connect(m_ctrl, &ScanController::calibration3DFinished, this, [this](bool success, QString report) {
+        if (success) {
+            QMessageBox::information(this, "3D PCL Kalibrasyonu Başarılı", report);
+        } else {
+            QMessageBox::warning(this, "3D PCL Kalibrasyonu Başarısız", report);
+        }
+    });
+
+    // Kalibrasyon Yönetimi Butonları
+    connect(m_loadCalibBtn, &QPushButton::clicked, this, [this]() {
+        QString selected = m_calibProfileCombo->currentText();
+        if (!selected.isEmpty()) {
+            m_ctrl->updateActiveCalibration(selected);
+        }
+    });
+
+    connect(m_clearCalibBtn, &QPushButton::clicked, this, [this]() {
+        m_ctrl->disableCalibration();
+        QMessageBox::information(this, "Sıfırlandı", "Kalibrasyon devre dışı bırakıldı. Tüm noktalar ham hallerine döndürüldü.");
+    });
+
+    connect(m_saveAsCalibBtn, &QPushButton::clicked, this, [this]() {
+        bool ok;
+        QString text = QInputDialog::getText(this, tr("Farklı Kaydet"),
+                                             tr("Kalibrasyon Dosya İsmi:"), QLineEdit::Normal,
+                                             "calibration_new", &ok);
+        if (ok && !text.isEmpty()) {
+            if (!text.endsWith(".json")) text += ".json";
+            
+            AutoCalibrator tempCalibrator; 
+            tempCalibrator.setTransform(m_ctrl->getCalibrator()->getTransform());
+            if (tempCalibrator.saveCalibration(text)) {
+                QMessageBox::information(this, "Kaydedildi", text + " basariyla kaydedildi.");
+                refreshCalibrationList();
+                int idx = m_calibProfileCombo->findText(text);
+                if (idx >= 0) m_calibProfileCombo->setCurrentIndex(idx);
+            } else {
+                QMessageBox::warning(this, "Hata", "Dosya kaydedilemedi!");
+            }
+        }
+    });
+
+    refreshCalibrationList();
+}
+
+void SetupPanel::refreshCalibrationList()
+{
+    m_calibProfileCombo->clear();
+    QStringList files = AutoCalibrator::getAvailableCalibrations();
+    m_calibProfileCombo->addItems(files);
 }
 
 void SetupPanel::applySpinStyle(QWidget* w)
@@ -199,31 +317,21 @@ void SetupPanel::onApplyClicked()
     if (!m_ctrl)
         return;
 
-    const int profileRate = m_profileRateSpin->value();
-    const int shutterUs = m_shutterSpin->value();
-    const int periodUs = 1000000 / profileRate;
-
-    if (shutterUs >= periodUs) {
-        QMessageBox::warning(
-            this,
-            "Gecersiz Ayar",
-            "Pozlama suresi, secilen profil hizinin periyodundan kucuk olmalidir."
-        );
-        return;
-    }
-
     m_ctrl->setDOffset(static_cast<float>(m_dOffsetSpin->value()));
     m_ctrl->setLateralOffset(static_cast<float>(m_lOffsetSpin->value()));
-    m_ctrl->setResolution(static_cast<float>(m_resSpin->value()));
+    m_ctrl->setAs5600Resolution(static_cast<float>(m_as5600ResSpin->value()));
+    m_ctrl->setStepResolution(static_cast<float>(m_stepResSpin->value()));
     m_ctrl->setLaserProfileRate(m_profileRateSpin->value());
-    m_ctrl->setLaserShutterUs(m_shutterSpin->value());
-    m_ctrl->setLaserAutoShutter(m_autoShutterCheck->isChecked());
     m_ctrl->setLaserMeasuringField(m_measuringFieldCombo->currentText());
     m_ctrl->setLaserPointsPerProfile(m_pointsPerProfileCombo->currentText().toInt());
 
     // Tetik modunu uygula
     const int modeIdx = m_triggerModeCombo->currentData().toInt();
     m_ctrl->setTriggerMode(static_cast<ScanTriggerMode>(modeIdx));
+
+    // Tetik kaynagini uygula
+    const int srcIdx = m_triggerSourceCombo->currentData().toInt();
+    m_ctrl->setTriggerSource(static_cast<TriggerSource>(srcIdx));
 }
 
 void SetupPanel::onReadClicked()
@@ -233,14 +341,17 @@ void SetupPanel::onReadClicked()
 
     m_dOffsetSpin->setValue(m_ctrl->dOffset());
     m_lOffsetSpin->setValue(m_ctrl->lateralOffset());
-    m_resSpin->setValue(m_ctrl->resolution());
+    m_as5600ResSpin->setValue(m_ctrl->as5600Resolution());
+    m_stepResSpin->setValue(m_ctrl->stepResolution());
     m_profileRateSpin->setValue(m_ctrl->laserProfileRate());
-    m_shutterSpin->setValue(m_ctrl->laserShutterUs());
-    m_autoShutterCheck->setChecked(m_ctrl->laserAutoShutter());
     m_measuringFieldCombo->setCurrentText(m_ctrl->laserMeasuringField());
     m_pointsPerProfileCombo->setCurrentText(QString::number(m_ctrl->laserPointsPerProfile()));
 
     // Tetik modunu oku
     const int modeIdx = static_cast<int>(m_ctrl->triggerMode());
     m_triggerModeCombo->setCurrentIndex(modeIdx);
+
+    // Tetik kaynagini oku
+    const int srcIdx = static_cast<int>(m_ctrl->triggerSource());
+    m_triggerSourceCombo->setCurrentIndex(srcIdx);
 }

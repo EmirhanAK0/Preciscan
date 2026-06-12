@@ -310,10 +310,16 @@ C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ pr
   C:/Qt/6.10.1/msvc2022_64/include/QtCore/qxpfunctional.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtCore/qxptype_traits.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtCore/qyieldcpu.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/QMatrix4x4 \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/QVector3D \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qgenericmatrix.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qmatrix4x4.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qtgui-config.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qtguiexports.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qtguiglobal.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qvector3d.h \
+  C:/Qt/6.10.1/msvc2022_64/include/QtGui/qvector4d.h \
   C:/Qt/6.10.1/msvc2022_64/include/QtGui/qvectornd.h \
   C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/app/controller/ScanProfileFrame.hpp \
+  C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/app/utils/AutoCalibrator.h \
   C:/Users/Emirhan/OneDrive\ -\ Yildiz\ Technical\ University/Masaüstü/m2lab\ proje/Preciscan/pc/io/serial_trigger_reader.h

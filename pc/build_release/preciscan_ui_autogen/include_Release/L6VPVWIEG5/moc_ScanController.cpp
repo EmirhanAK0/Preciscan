@@ -77,11 +77,20 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "triggerModeChanged",
         "ScanTriggerMode",
         "mode",
+        "triggerSourceChanged",
+        "TriggerSource",
+        "src",
         "historySizeChanged",
         "size",
         "activeLayerChanged",
         "id",
         "layersUpdated",
+        "autoCalibrationFinished",
+        "bestOffset",
+        "score",
+        "calibration3DFinished",
+        "success",
+        "report",
         "connectMcu",
         "disconnectMcu",
         "connectLaser",
@@ -91,10 +100,11 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "setDOffset",
         "mm",
         "setLateralOffset",
-        "setResolution",
+        "setAs5600Resolution",
         "deg",
-        "setRps",
-        "rps",
+        "setStepResolution",
+        "setSecPerRev",
+        "sec",
         "setLaserProfileRate",
         "hz",
         "setLaserShutterUs",
@@ -106,6 +116,7 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "setLaserPointsPerProfile",
         "points",
         "setTriggerMode",
+        "setTriggerSource",
         "setSerialPort",
         "portName",
         "onEncoderTrigger",
@@ -137,6 +148,11 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "name",
         "setLayerZOffset",
         "addNewLayer",
+        "getCalibrator",
+        "AutoCalibrator*",
+        "updateActiveCalibration",
+        "filePath",
+        "disableCalibration",
         "applyFilterCylindrical",
         "radiusMm",
         "minZ",
@@ -163,6 +179,9 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         "rz",
         "commitManualAlignment",
         "cancelManualAlignment",
+        "autoCalibrateOffsetAsync",
+        "start3DCalibrationAsync",
+        "method",
         "consumeHardwarePackets",
         "onMeshFinished",
         "onFilterFinished",
@@ -230,185 +249,221 @@ template <> constexpr inline auto ScanController::qt_create_metaobjectdata<qt_me
         QtMocHelpers::SignalData<void(ScanTriggerMode)>(35, 2, QMC::AccessPublic, QMetaType::Void, {{
             { 0x80000000 | 36, 37 },
         }}),
+        // Signal 'triggerSourceChanged'
+        QtMocHelpers::SignalData<void(TriggerSource)>(38, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 39, 40 },
+        }}),
         // Signal 'historySizeChanged'
-        QtMocHelpers::SignalData<void(int)>(38, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 39 },
+        QtMocHelpers::SignalData<void(int)>(41, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 42 },
         }}),
         // Signal 'activeLayerChanged'
-        QtMocHelpers::SignalData<void(int)>(40, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 41 },
+        QtMocHelpers::SignalData<void(int)>(43, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 44 },
         }}),
         // Signal 'layersUpdated'
-        QtMocHelpers::SignalData<void()>(42, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SignalData<void()>(45, 2, QMC::AccessPublic, QMetaType::Void),
+        // Signal 'autoCalibrationFinished'
+        QtMocHelpers::SignalData<void(float, double)>(46, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 47 }, { QMetaType::Double, 48 },
+        }}),
+        // Signal 'calibration3DFinished'
+        QtMocHelpers::SignalData<void(bool, QString)>(49, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Bool, 50 }, { QMetaType::QString, 51 },
+        }}),
         // Slot 'connectMcu'
-        QtMocHelpers::SlotData<void()>(43, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(52, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'disconnectMcu'
-        QtMocHelpers::SlotData<void()>(44, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(53, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'connectLaser'
-        QtMocHelpers::SlotData<void()>(45, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(54, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'connectLaserSim'
-        QtMocHelpers::SlotData<void(const QString &)>(46, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 47 },
+        QtMocHelpers::SlotData<void(const QString &)>(55, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::QString, 56 },
         }}),
         // Slot 'disconnectLaser'
-        QtMocHelpers::SlotData<void()>(48, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(57, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'setDOffset'
-        QtMocHelpers::SlotData<void(float)>(49, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 50 },
+        QtMocHelpers::SlotData<void(float)>(58, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 59 },
         }}),
         // Slot 'setLateralOffset'
-        QtMocHelpers::SlotData<void(float)>(51, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 50 },
+        QtMocHelpers::SlotData<void(float)>(60, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 59 },
         }}),
-        // Slot 'setResolution'
-        QtMocHelpers::SlotData<void(float)>(52, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 53 },
+        // Slot 'setAs5600Resolution'
+        QtMocHelpers::SlotData<void(float)>(61, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 62 },
         }}),
-        // Slot 'setRps'
-        QtMocHelpers::SlotData<void(float)>(54, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 55 },
+        // Slot 'setStepResolution'
+        QtMocHelpers::SlotData<void(float)>(63, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 62 },
+        }}),
+        // Slot 'setSecPerRev'
+        QtMocHelpers::SlotData<void(float)>(64, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 65 },
         }}),
         // Slot 'setLaserProfileRate'
-        QtMocHelpers::SlotData<void(int)>(56, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 57 },
+        QtMocHelpers::SlotData<void(int)>(66, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 67 },
         }}),
         // Slot 'setLaserShutterUs'
-        QtMocHelpers::SlotData<void(int)>(58, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 59 },
+        QtMocHelpers::SlotData<void(int)>(68, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 69 },
         }}),
         // Slot 'setLaserAutoShutter'
-        QtMocHelpers::SlotData<void(bool)>(60, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 61 },
+        QtMocHelpers::SlotData<void(bool)>(70, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Bool, 71 },
         }}),
         // Slot 'setLaserMeasuringField'
-        QtMocHelpers::SlotData<void(const QString &)>(62, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 63 },
+        QtMocHelpers::SlotData<void(const QString &)>(72, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::QString, 73 },
         }}),
         // Slot 'setLaserPointsPerProfile'
-        QtMocHelpers::SlotData<void(int)>(64, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 65 },
+        QtMocHelpers::SlotData<void(int)>(74, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 75 },
         }}),
         // Slot 'setTriggerMode'
-        QtMocHelpers::SlotData<void(ScanTriggerMode)>(66, 2, QMC::AccessPublic, QMetaType::Void, {{
+        QtMocHelpers::SlotData<void(ScanTriggerMode)>(76, 2, QMC::AccessPublic, QMetaType::Void, {{
             { 0x80000000 | 36, 37 },
         }}),
+        // Slot 'setTriggerSource'
+        QtMocHelpers::SlotData<void(TriggerSource)>(77, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 39, 40 },
+        }}),
         // Slot 'setSerialPort'
-        QtMocHelpers::SlotData<void(const QString &)>(67, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 68 },
-        }}),
-        // Slot 'onEncoderTrigger'
-        QtMocHelpers::SlotData<void(float)>(69, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 70 },
-        }}),
-        // Slot 'connectMcuSerial'
-        QtMocHelpers::SlotData<void()>(71, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'disconnectMcuSerial'
-        QtMocHelpers::SlotData<void()>(72, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'startScan'
-        QtMocHelpers::SlotData<void(int)>(73, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 74 },
-        }}),
-        // Slot 'startScan'
-        QtMocHelpers::SlotData<void()>(73, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void),
-        // Slot 'stopScan'
-        QtMocHelpers::SlotData<void()>(75, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'saveCurrentScan'
-        QtMocHelpers::SlotData<void(const QString &)>(76, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 77 },
-        }}),
-        // Slot 'sendSerialCommand'
-        QtMocHelpers::SlotData<bool(const QString &)>(78, 2, QMC::AccessPublic, QMetaType::Bool, {{
+        QtMocHelpers::SlotData<void(const QString &)>(78, 2, QMC::AccessPublic, QMetaType::Void, {{
             { QMetaType::QString, 79 },
         }}),
-        // Slot 'sendZMove'
+        // Slot 'onEncoderTrigger'
         QtMocHelpers::SlotData<void(float)>(80, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 50 },
+            { QMetaType::Float, 81 },
+        }}),
+        // Slot 'connectMcuSerial'
+        QtMocHelpers::SlotData<void()>(82, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'disconnectMcuSerial'
+        QtMocHelpers::SlotData<void()>(83, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'startScan'
+        QtMocHelpers::SlotData<void(int)>(84, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 85 },
+        }}),
+        // Slot 'startScan'
+        QtMocHelpers::SlotData<void()>(84, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void),
+        // Slot 'stopScan'
+        QtMocHelpers::SlotData<void()>(86, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'saveCurrentScan'
+        QtMocHelpers::SlotData<void(const QString &)>(87, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::QString, 88 },
+        }}),
+        // Slot 'sendSerialCommand'
+        QtMocHelpers::SlotData<bool(const QString &)>(89, 2, QMC::AccessPublic, QMetaType::Bool, {{
+            { QMetaType::QString, 90 },
+        }}),
+        // Slot 'sendZMove'
+        QtMocHelpers::SlotData<void(float)>(91, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 59 },
         }}),
         // Slot 'sendZHome'
-        QtMocHelpers::SlotData<void()>(81, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(92, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'sendLinHome'
-        QtMocHelpers::SlotData<void()>(82, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(93, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'mergeWithICPAsync'
-        QtMocHelpers::SlotData<void(const QVector<QVector3D> &, const QVector<QVector3D> &, int)>(83, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 12, 84 }, { 0x80000000 | 12, 85 }, { QMetaType::Int, 86 },
+        QtMocHelpers::SlotData<void(const QVector<QVector3D> &, const QVector<QVector3D> &, int)>(94, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 12, 95 }, { 0x80000000 | 12, 96 }, { QMetaType::Int, 97 },
         }}),
         // Slot 'mergeSelectedLayers'
-        QtMocHelpers::SlotData<void(const QVector<int> &, const QString &)>(87, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 88, 89 }, { QMetaType::QString, 37 },
+        QtMocHelpers::SlotData<void(const QVector<int> &, const QString &)>(98, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 99, 100 }, { QMetaType::QString, 37 },
         }}),
         // Slot 'generateMeshAsync'
-        QtMocHelpers::SlotData<void()>(90, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(101, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'clearMesh'
-        QtMocHelpers::SlotData<void()>(91, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(102, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'setActiveLayer'
-        QtMocHelpers::SlotData<void(int)>(92, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 41 },
+        QtMocHelpers::SlotData<void(int)>(103, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 44 },
         }}),
         // Slot 'deleteLayer'
-        QtMocHelpers::SlotData<void(int)>(93, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 41 },
+        QtMocHelpers::SlotData<void(int)>(104, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 44 },
         }}),
         // Slot 'setLayerName'
-        QtMocHelpers::SlotData<void(int, const QString &)>(94, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 41 }, { QMetaType::QString, 95 },
+        QtMocHelpers::SlotData<void(int, const QString &)>(105, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 44 }, { QMetaType::QString, 106 },
         }}),
         // Slot 'setLayerZOffset'
-        QtMocHelpers::SlotData<void(int, float)>(96, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 41 }, { QMetaType::Float, 50 },
+        QtMocHelpers::SlotData<void(int, float)>(107, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 44 }, { QMetaType::Float, 59 },
         }}),
         // Slot 'addNewLayer'
-        QtMocHelpers::SlotData<void(const QVector<QVector3D> &, const QString &)>(97, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 12, 65 }, { QMetaType::QString, 95 },
+        QtMocHelpers::SlotData<void(const QVector<QVector3D> &, const QString &)>(108, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 12, 75 }, { QMetaType::QString, 106 },
         }}),
         // Slot 'addNewLayer'
-        QtMocHelpers::SlotData<void(const QVector<QVector3D> &)>(97, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void, {{
-            { 0x80000000 | 12, 65 },
+        QtMocHelpers::SlotData<void(const QVector<QVector3D> &)>(108, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void, {{
+            { 0x80000000 | 12, 75 },
         }}),
+        // Slot 'getCalibrator'
+        QtMocHelpers::SlotData<AutoCalibrator *() const>(109, 2, QMC::AccessPublic, 0x80000000 | 110),
+        // Slot 'updateActiveCalibration'
+        QtMocHelpers::SlotData<void(QString)>(111, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::QString, 112 },
+        }}),
+        // Slot 'disableCalibration'
+        QtMocHelpers::SlotData<void()>(113, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'applyFilterCylindrical'
-        QtMocHelpers::SlotData<void(float, float, float)>(98, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 99 }, { QMetaType::Float, 100 }, { QMetaType::Float, 101 },
+        QtMocHelpers::SlotData<void(float, float, float)>(114, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 115 }, { QMetaType::Float, 116 }, { QMetaType::Float, 117 },
         }}),
         // Slot 'applyFilterStatistical'
-        QtMocHelpers::SlotData<void(int, float)>(102, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 103 }, { QMetaType::Float, 104 },
+        QtMocHelpers::SlotData<void(int, float)>(118, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 119 }, { QMetaType::Float, 120 },
         }}),
         // Slot 'applyFilterRadius'
-        QtMocHelpers::SlotData<void(float, int)>(105, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 99 }, { QMetaType::Int, 106 },
+        QtMocHelpers::SlotData<void(float, int)>(121, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 115 }, { QMetaType::Int, 122 },
         }}),
         // Slot 'applyFilterVoxelGrid'
-        QtMocHelpers::SlotData<void(float)>(107, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 108 },
+        QtMocHelpers::SlotData<void(float)>(123, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 124 },
         }}),
         // Slot 'clearHistory'
-        QtMocHelpers::SlotData<void()>(109, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(125, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'applyManualDeletion'
-        QtMocHelpers::SlotData<void(const QVector<int> &)>(110, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 88, 111 },
+        QtMocHelpers::SlotData<void(const QVector<int> &)>(126, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 99, 127 },
         }}),
         // Slot 'undoLastFilter'
-        QtMocHelpers::SlotData<void()>(112, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(128, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'resetCloud'
-        QtMocHelpers::SlotData<void()>(113, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(129, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'beginManualAlignment'
-        QtMocHelpers::SlotData<void()>(114, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(130, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'updateManualAlignment'
-        QtMocHelpers::SlotData<void(float, float, float, float, float, float)>(115, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Float, 116 }, { QMetaType::Float, 117 }, { QMetaType::Float, 118 }, { QMetaType::Float, 119 },
-            { QMetaType::Float, 120 }, { QMetaType::Float, 121 },
+        QtMocHelpers::SlotData<void(float, float, float, float, float, float)>(131, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Float, 132 }, { QMetaType::Float, 133 }, { QMetaType::Float, 134 }, { QMetaType::Float, 135 },
+            { QMetaType::Float, 136 }, { QMetaType::Float, 137 },
         }}),
         // Slot 'commitManualAlignment'
-        QtMocHelpers::SlotData<void()>(122, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(138, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'cancelManualAlignment'
-        QtMocHelpers::SlotData<void()>(123, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(139, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'autoCalibrateOffsetAsync'
+        QtMocHelpers::SlotData<void()>(140, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'start3DCalibrationAsync'
+        QtMocHelpers::SlotData<void(int)>(141, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Int, 142 },
+        }}),
+        // Slot 'start3DCalibrationAsync'
+        QtMocHelpers::SlotData<void()>(141, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void),
         // Slot 'consumeHardwarePackets'
-        QtMocHelpers::SlotData<void()>(124, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(143, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onMeshFinished'
-        QtMocHelpers::SlotData<void()>(125, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(144, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onFilterFinished'
-        QtMocHelpers::SlotData<void()>(126, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(145, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onIcpFinished'
-        QtMocHelpers::SlotData<void()>(127, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(146, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -449,77 +504,89 @@ void ScanController::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
         case 14: _t->meshLoaded((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1]))); break;
         case 15: _t->logMessage((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
         case 16: _t->triggerModeChanged((*reinterpret_cast<std::add_pointer_t<ScanTriggerMode>>(_a[1]))); break;
-        case 17: _t->historySizeChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 18: _t->activeLayerChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 19: _t->layersUpdated(); break;
-        case 20: _t->connectMcu(); break;
-        case 21: _t->disconnectMcu(); break;
-        case 22: _t->connectLaser(); break;
-        case 23: _t->connectLaserSim((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
-        case 24: _t->disconnectLaser(); break;
-        case 25: _t->setDOffset((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 26: _t->setLateralOffset((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 27: _t->setResolution((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 28: _t->setRps((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 29: _t->setLaserProfileRate((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 30: _t->setLaserShutterUs((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 31: _t->setLaserAutoShutter((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
-        case 32: _t->setLaserMeasuringField((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
-        case 33: _t->setLaserPointsPerProfile((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 34: _t->setTriggerMode((*reinterpret_cast<std::add_pointer_t<ScanTriggerMode>>(_a[1]))); break;
-        case 35: _t->setSerialPort((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
-        case 36: _t->onEncoderTrigger((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 37: _t->connectMcuSerial(); break;
-        case 38: _t->disconnectMcuSerial(); break;
-        case 39: _t->startScan((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 40: _t->startScan(); break;
-        case 41: _t->stopScan(); break;
-        case 42: _t->saveCurrentScan((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
-        case 43: { bool _r = _t->sendSerialCommand((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1])));
+        case 17: _t->triggerSourceChanged((*reinterpret_cast<std::add_pointer_t<TriggerSource>>(_a[1]))); break;
+        case 18: _t->historySizeChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 19: _t->activeLayerChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 20: _t->layersUpdated(); break;
+        case 21: _t->autoCalibrationFinished((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2]))); break;
+        case 22: _t->calibration3DFinished((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
+        case 23: _t->connectMcu(); break;
+        case 24: _t->disconnectMcu(); break;
+        case 25: _t->connectLaser(); break;
+        case 26: _t->connectLaserSim((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
+        case 27: _t->disconnectLaser(); break;
+        case 28: _t->setDOffset((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 29: _t->setLateralOffset((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 30: _t->setAs5600Resolution((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 31: _t->setStepResolution((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 32: _t->setSecPerRev((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 33: _t->setLaserProfileRate((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 34: _t->setLaserShutterUs((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 35: _t->setLaserAutoShutter((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
+        case 36: _t->setLaserMeasuringField((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
+        case 37: _t->setLaserPointsPerProfile((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 38: _t->setTriggerMode((*reinterpret_cast<std::add_pointer_t<ScanTriggerMode>>(_a[1]))); break;
+        case 39: _t->setTriggerSource((*reinterpret_cast<std::add_pointer_t<TriggerSource>>(_a[1]))); break;
+        case 40: _t->setSerialPort((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
+        case 41: _t->onEncoderTrigger((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 42: _t->connectMcuSerial(); break;
+        case 43: _t->disconnectMcuSerial(); break;
+        case 44: _t->startScan((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 45: _t->startScan(); break;
+        case 46: _t->stopScan(); break;
+        case 47: _t->saveCurrentScan((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
+        case 48: { bool _r = _t->sendSerialCommand((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1])));
             if (_a[0]) *reinterpret_cast<bool*>(_a[0]) = std::move(_r); }  break;
-        case 44: _t->sendZMove((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 45: _t->sendZHome(); break;
-        case 46: _t->sendLinHome(); break;
-        case 47: _t->mergeWithICPAsync((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[3]))); break;
-        case 48: _t->mergeSelectedLayers((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
-        case 49: _t->generateMeshAsync(); break;
-        case 50: _t->clearMesh(); break;
-        case 51: _t->setActiveLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 52: _t->deleteLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
-        case 53: _t->setLayerName((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
-        case 54: _t->setLayerZOffset((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
-        case 55: _t->addNewLayer((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
-        case 56: _t->addNewLayer((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1]))); break;
-        case 57: _t->applyFilterCylindrical((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3]))); break;
-        case 58: _t->applyFilterStatistical((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
-        case 59: _t->applyFilterRadius((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[2]))); break;
-        case 60: _t->applyFilterVoxelGrid((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
-        case 61: _t->clearHistory(); break;
-        case 62: _t->applyManualDeletion((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1]))); break;
-        case 63: _t->undoLastFilter(); break;
-        case 64: _t->resetCloud(); break;
-        case 65: _t->beginManualAlignment(); break;
-        case 66: _t->updateManualAlignment((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[6]))); break;
-        case 67: _t->commitManualAlignment(); break;
-        case 68: _t->cancelManualAlignment(); break;
-        case 69: _t->consumeHardwarePackets(); break;
-        case 70: _t->onMeshFinished(); break;
-        case 71: _t->onFilterFinished(); break;
-        case 72: _t->onIcpFinished(); break;
+        case 49: _t->sendZMove((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 50: _t->sendZHome(); break;
+        case 51: _t->sendLinHome(); break;
+        case 52: _t->mergeWithICPAsync((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[3]))); break;
+        case 53: _t->mergeSelectedLayers((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
+        case 54: _t->generateMeshAsync(); break;
+        case 55: _t->clearMesh(); break;
+        case 56: _t->setActiveLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 57: _t->deleteLayer((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 58: _t->setLayerName((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
+        case 59: _t->setLayerZOffset((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
+        case 60: _t->addNewLayer((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[2]))); break;
+        case 61: _t->addNewLayer((*reinterpret_cast<std::add_pointer_t<QList<QVector3D>>>(_a[1]))); break;
+        case 62: { AutoCalibrator* _r = _t->getCalibrator();
+            if (_a[0]) *reinterpret_cast<AutoCalibrator**>(_a[0]) = std::move(_r); }  break;
+        case 63: _t->updateActiveCalibration((*reinterpret_cast<std::add_pointer_t<QString>>(_a[1]))); break;
+        case 64: _t->disableCalibration(); break;
+        case 65: _t->applyFilterCylindrical((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3]))); break;
+        case 66: _t->applyFilterStatistical((*reinterpret_cast<std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2]))); break;
+        case 67: _t->applyFilterRadius((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[2]))); break;
+        case 68: _t->applyFilterVoxelGrid((*reinterpret_cast<std::add_pointer_t<float>>(_a[1]))); break;
+        case 69: _t->clearHistory(); break;
+        case 70: _t->applyManualDeletion((*reinterpret_cast<std::add_pointer_t<QList<int>>>(_a[1]))); break;
+        case 71: _t->undoLastFilter(); break;
+        case 72: _t->resetCloud(); break;
+        case 73: _t->beginManualAlignment(); break;
+        case 74: _t->updateManualAlignment((*reinterpret_cast<std::add_pointer_t<float>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<float>>(_a[6]))); break;
+        case 75: _t->commitManualAlignment(); break;
+        case 76: _t->cancelManualAlignment(); break;
+        case 77: _t->autoCalibrateOffsetAsync(); break;
+        case 78: _t->start3DCalibrationAsync((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
+        case 79: _t->start3DCalibrationAsync(); break;
+        case 80: _t->consumeHardwarePackets(); break;
+        case 81: _t->onMeshFinished(); break;
+        case 82: _t->onFilterFinished(); break;
+        case 83: _t->onIcpFinished(); break;
         default: ;
         }
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
         switch (_id) {
         default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
-        case 48:
+        case 53:
             switch (*reinterpret_cast<int*>(_a[1])) {
             default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
             case 0:
                 *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType::fromType< QList<int> >(); break;
             }
             break;
-        case 62:
+        case 70:
             switch (*reinterpret_cast<int*>(_a[1])) {
             default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
             case 0:
@@ -563,11 +630,17 @@ void ScanController::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _
             return;
         if (QtMocHelpers::indexOfMethod<void (ScanController::*)(ScanTriggerMode )>(_a, &ScanController::triggerModeChanged, 16))
             return;
-        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(int )>(_a, &ScanController::historySizeChanged, 17))
+        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(TriggerSource )>(_a, &ScanController::triggerSourceChanged, 17))
             return;
-        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(int )>(_a, &ScanController::activeLayerChanged, 18))
+        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(int )>(_a, &ScanController::historySizeChanged, 18))
             return;
-        if (QtMocHelpers::indexOfMethod<void (ScanController::*)()>(_a, &ScanController::layersUpdated, 19))
+        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(int )>(_a, &ScanController::activeLayerChanged, 19))
+            return;
+        if (QtMocHelpers::indexOfMethod<void (ScanController::*)()>(_a, &ScanController::layersUpdated, 20))
+            return;
+        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(float , double )>(_a, &ScanController::autoCalibrationFinished, 21))
+            return;
+        if (QtMocHelpers::indexOfMethod<void (ScanController::*)(bool , QString )>(_a, &ScanController::calibration3DFinished, 22))
             return;
     }
 }
@@ -591,14 +664,14 @@ int ScanController::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 73)
+        if (_id < 84)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 73;
+        _id -= 84;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 73)
+        if (_id < 84)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 73;
+        _id -= 84;
     }
     return _id;
 }
@@ -706,20 +779,38 @@ void ScanController::triggerModeChanged(ScanTriggerMode _t1)
 }
 
 // SIGNAL 17
-void ScanController::historySizeChanged(int _t1)
+void ScanController::triggerSourceChanged(TriggerSource _t1)
 {
     QMetaObject::activate<void>(this, &staticMetaObject, 17, nullptr, _t1);
 }
 
 // SIGNAL 18
-void ScanController::activeLayerChanged(int _t1)
+void ScanController::historySizeChanged(int _t1)
 {
     QMetaObject::activate<void>(this, &staticMetaObject, 18, nullptr, _t1);
 }
 
 // SIGNAL 19
+void ScanController::activeLayerChanged(int _t1)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 19, nullptr, _t1);
+}
+
+// SIGNAL 20
 void ScanController::layersUpdated()
 {
-    QMetaObject::activate(this, &staticMetaObject, 19, nullptr);
+    QMetaObject::activate(this, &staticMetaObject, 20, nullptr);
+}
+
+// SIGNAL 21
+void ScanController::autoCalibrationFinished(float _t1, double _t2)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 21, nullptr, _t1, _t2);
+}
+
+// SIGNAL 22
+void ScanController::calibration3DFinished(bool _t1, QString _t2)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 22, nullptr, _t1, _t2);
 }
 QT_WARNING_POP

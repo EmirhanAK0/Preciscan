@@ -2,6 +2,7 @@
 #include "LayerItemWidget.hpp"
 
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDateTime>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
@@ -54,14 +55,14 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     grid->setHorizontalSpacing(8);
     grid->setVerticalSpacing(4);
 
-    auto* speedLabel = new QLabel("Hiz (rps):", this);
+    auto* speedLabel = new QLabel("Tur Süresi (sn):", this);
     speedLabel->setStyleSheet("color: #aaa; font-size: 10px;");
     m_speedSlider = new QSlider(Qt::Horizontal, this);
-    m_speedSlider->setRange(5, 70);
-    m_speedSlider->setValue(10);
+    m_speedSlider->setRange(10, 250);
+    m_speedSlider->setValue(30);
     m_speedSpin = new QSpinBox(this);
-    m_speedSpin->setRange(5, 70);
-    m_speedSpin->setValue(10);
+    m_speedSpin->setRange(10, 250);
+    m_speedSpin->setValue(30);
     m_speedSpin->setFixedWidth(55);
     m_speedSpin->setStyleSheet(
         "background:#1a1a1a; color:#ccc; border:1px solid #333; border-radius:3px;");
@@ -72,7 +73,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             [this](int val)
             {
                 if (m_ctrl)
-                    m_ctrl->setRps(static_cast<float>(val));
+                    m_ctrl->setSecPerRev(static_cast<float>(val));
             });
 
     auto* expLabel = new QLabel("Poz. (us):", this);
@@ -86,9 +87,33 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     m_exposureSpin->setFixedWidth(55);
     m_exposureSpin->setStyleSheet(
         "background:#1a1a1a; color:#ccc; border:1px solid #333; border-radius:3px;");
+    m_autoShutterCheck = new QCheckBox("Otomatik", this);
+    m_autoShutterCheck->setStyleSheet("color: #aaa; font-size: 10px;");
+    
+    // Değerleri Control'den al
+    if (m_ctrl) {
+        m_speedSlider->setValue(static_cast<int>(m_ctrl->secPerRev()));
+        m_speedSpin->setValue(static_cast<int>(m_ctrl->secPerRev()));
+        m_exposureSlider->setValue(m_ctrl->laserShutterUs());
+        m_exposureSpin->setValue(m_ctrl->laserShutterUs());
+        m_autoShutterCheck->setChecked(m_ctrl->laserAutoShutter());
+    }
+
     connect(m_exposureSlider, &QSlider::valueChanged, m_exposureSpin, &QSpinBox::setValue);
     connect(m_exposureSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_exposureSlider,
             &QSlider::setValue);
+            
+    connect(m_exposureSlider, &QSlider::valueChanged, this,
+            [this](int val)
+            {
+                if (m_ctrl) m_ctrl->setLaserShutterUs(val);
+            });
+            
+    connect(m_autoShutterCheck, &QCheckBox::toggled, this,
+            [this](bool checked)
+            {
+                if (m_ctrl) m_ctrl->setLaserAutoShutter(checked);
+            });
 
     grid->addWidget(speedLabel, 0, 0);
     grid->addWidget(m_speedSlider, 0, 1);
@@ -96,6 +121,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     grid->addWidget(expLabel, 1, 0);
     grid->addWidget(m_exposureSlider, 1, 1);
     grid->addWidget(m_exposureSpin, 1, 2);
+    grid->addWidget(m_autoShutterCheck, 2, 0, 1, 3); // Otomatik checkbox'ı
     root->addLayout(grid);
 
     // -- Kontrol ------------------------------------------------

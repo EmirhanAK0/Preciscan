@@ -12,6 +12,7 @@ class QLabel;
 class QSlider;
 class QSpinBox;
 class QComboBox;
+class QCheckBox;
 class LayerItemWidget;
 class QDoubleSpinBox;
 
@@ -58,6 +59,7 @@ private:
     QSpinBox* m_speedSpin;
     QSlider*  m_exposureSlider;
     QSpinBox* m_exposureSpin;
+    QCheckBox* m_autoShutterCheck;
 
     // Kontrol
     QLabel*      m_scanStatusLabel;

@@ -16,7 +16,7 @@ struct SliceParams
 {
     float D_offset_mm  = 66.0f;
     float deg_per_step = 1.0f;
-    float rps          = 10.0f;
+    float sec_per_rev  = 30.0f;
 };
 
 std::vector<ProfilePoint>

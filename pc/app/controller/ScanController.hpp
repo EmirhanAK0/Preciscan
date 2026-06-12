@@ -14,6 +14,7 @@
 #include <QMap>
 
 #include "../../io/serial_trigger_reader.h"
+#include "../utils/AutoCalibrator.h"
 #include "ScanProfileFrame.hpp"
 
 /// Bir tarama katmaninin nokta bulutu ve meta verileri
@@ -30,6 +31,12 @@ enum class ScanTriggerMode {
     TimeBased,      ///< Dahili zamanlayıcı (orijinal davranış)
     Encoder,        ///< MCU'dan gelen enkoder açısı tetikler
     ExternalTrigger ///< Harici dijital tetik sinyali (ayrı pin)
+};
+
+/// Tarama tetik kaynağı (Donanımsal açı bilgisi nereden geliyor)
+enum class TriggerSource {
+    AS5600 = 0,     ///< Manyetik enkoderden gelen açı (orijinal davranış)
+    StepAngle = 1   ///< Motor adımları üzerinden hesaplanan açı
 };
 
 class McuListener;
@@ -57,8 +64,9 @@ public:
 
     float dOffset() const { return m_dOffset; }
     float lateralOffset() const { return m_lOffset; }
-    float resolution() const { return m_resolution; }
-    float rps() const { return m_rps; }
+    float as5600Resolution() const { return m_as5600Resolution; }
+    float stepResolution() const { return m_stepResolution; }
+    float secPerRev() const { return m_secPerRev; }
 
     const QVector<QVector3D>& getLastCloud() const;
     void setLastCloud(const QVector<QVector3D>& cloud);
@@ -73,6 +81,7 @@ public:
     int laserPointsPerProfile() const { return m_laserPointsPerProfile; }
 
     ScanTriggerMode triggerMode() const { return m_triggerMode; }
+    TriggerSource triggerSource() const { return m_triggerSource; }
 
 public slots:
     void connectMcu();
@@ -83,8 +92,9 @@ public slots:
 
     void setDOffset(float mm);
     void setLateralOffset(float mm);
-    void setResolution(float deg);
-    void setRps(float rps);
+    void setAs5600Resolution(float deg);
+    void setStepResolution(float deg);
+    void setSecPerRev(float sec);
 
     void setLaserProfileRate(int hz);
     void setLaserShutterUs(int us);
@@ -92,6 +102,7 @@ public slots:
     void setLaserMeasuringField(const QString& field);
     void setLaserPointsPerProfile(int points);
     void setTriggerMode(ScanTriggerMode mode);
+    void setTriggerSource(TriggerSource src);
     void setSerialPort(const QString& portName);
 
     void onEncoderTrigger(float angleDeg);
@@ -119,6 +130,8 @@ public slots:
     void setLayerZOffset(int id, float mm);
     void addNewLayer(const QVector<QVector3D>& points, const QString& name = QString());
 
+    AutoCalibrator* getCalibrator() const { return m_calibrator; }
+
 signals:
     void mcuConnectionChanged(bool connected);
     void laserConnectionChanged(bool connected);
@@ -137,11 +150,16 @@ signals:
     void meshLoaded(const QVector<QVector3D>& triangles);
     void logMessage(const QString& level, const QString& msg);
     void triggerModeChanged(ScanTriggerMode mode);
+    void triggerSourceChanged(TriggerSource src);
     void historySizeChanged(int size);
     void activeLayerChanged(int id);
     void layersUpdated();
+    void autoCalibrationFinished(float bestOffset, double score);
+    void calibration3DFinished(bool success, QString report);
 
 public slots:
+    void updateActiveCalibration(QString filePath);
+    void disableCalibration();
     void applyFilterCylindrical(float radiusMm, float minZ, float maxZ);
     void applyFilterStatistical(int meanK, float stdDevThresh);
     void applyFilterRadius(float radiusMm, int minNeighbors);
@@ -157,6 +175,10 @@ public slots:
     void updateManualAlignment(float tx, float ty, float tz, float rx, float ry, float rz);
     void commitManualAlignment();
     void cancelManualAlignment();
+
+    // Otomatik Kalibrasyon
+    void autoCalibrateOffsetAsync();
+    void start3DCalibrationAsync(int method = 0);
 
 private slots:
     void consumeHardwarePackets();
@@ -181,8 +203,9 @@ private:
 
     float m_dOffset{78.5f};
     float m_lOffset{2.0f};
-    float m_resolution{1.0f};
-    float m_rps{10.0f};
+    float m_as5600Resolution{1.0f};
+    float m_stepResolution{1.0f};
+    float m_secPerRev{30.0f};
 
     int m_laserProfileRate{100};
     int m_laserShutterUs{100};
@@ -200,6 +223,7 @@ private:
     std::queue<float> m_encoderAngles;
 
     ScanTriggerMode m_triggerMode{ScanTriggerMode::Encoder};
+    TriggerSource m_triggerSource{TriggerSource::AS5600};
 
     QString m_serialPort{"COM3"};
     SerialTriggerReader* m_serialReader{nullptr};
@@ -219,7 +243,13 @@ private:
     
     QString m_currentTaskName;
     
+    QVector<QVector3D> m_lastCloudRaw;
+    
     QMap<int, ScanLayerData> m_layers;
     int m_nextLayerId{0};
     int m_activeLayerId{-1};
+
+    AutoCalibrator* m_calibrator{nullptr};
+
+    void reapplyCurrentCalibration();
 };

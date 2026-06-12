@@ -23,6 +23,20 @@ ScanController::ScanController(McuListener* mcu,
                                QObject* parent)
     : QObject(parent), m_mcu(mcu), m_laser(laser), m_ring(ring)
 {
+    m_calibrator = new AutoCalibrator(this);
+    // m_calibrator->loadCalibration(); artik otomatik yuklemiyoruz
+
+    connect(m_calibrator, &AutoCalibrator::calibrationFinished, this, [this](bool success, QMatrix4x4 mat, QString msg) {
+        emit processingFinished();
+        emit logMessage(success ? "OK" : "ERR", "3D Kalibrasyon: " + msg);
+        
+        if (success) {
+            reapplyCurrentCalibration();
+        }
+        
+        emit calibration3DFinished(success, msg);
+    });
+
     m_hwTimer = new QTimer(this);
     m_hwTimer->setInterval(0);
     connect(m_hwTimer, &QTimer::timeout, this, &ScanController::consumeHardwarePackets);
@@ -142,10 +156,14 @@ void ScanController::connectLaser()
     m_laser->setMeasuringField(m_laserMeasuringField.toStdString());
     m_laser->setPointsPerProfile(static_cast<unsigned int>(m_laserPointsPerProfile));
 
-    // Lazer her zaman Internal modda calisir (kendi zamanlayicisiyla profil uretir).
-    // Encoder eslestirme yazilimda yapilir — fiziksel tetik bagiantisina bagli degiliz.
-    m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
-    emit logMessage("SYS", "Lazer tetik: Internal (surekli profil akisi)");
+    // Tetikleme modunu aktar
+    if (m_triggerMode == ScanTriggerMode::TimeBased) {
+        m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
+        emit logMessage("SYS", "Lazer tetik: Internal (surekli profil akisi)");
+    } else {
+        m_laser->setTriggerMode(LaserManager::TriggerMode::ExternalDigitalIn);
+        emit logMessage("SYS", "Lazer tetik: External/Encoder (donanimsal tetik bekleniyor)");
+    }
 
     if (!m_laser->connect()) {
         emit logMessage("ERR",
@@ -210,8 +228,8 @@ void ScanController::connectLaserSim(const QString& stlPath)
 
     sim::SliceParams p;
     p.D_offset_mm = m_dOffset;
-    p.deg_per_step = m_resolution;
-    p.rps = m_rps;
+    p.deg_per_step = (m_triggerSource == TriggerSource::StepAngle) ? m_stepResolution : m_as5600Resolution;
+    p.sec_per_rev = m_secPerRev;
 
     if (m_simWorker) {
         m_simWorker->stop();
@@ -286,7 +304,8 @@ void ScanController::startScan(int direction)
 
     m_scanning = true;
     m_lastCloud.clear();
-    m_hwAngle = 0.0f;
+    m_lastCloudRaw.clear();
+
     m_hasStartAngle = false;
     m_startAngle = 0.0f;
 
@@ -305,6 +324,20 @@ void ScanController::startScan(int direction)
 
         // ── 7. Arduino'ya START gönder (motor dönsün) ───────────
         if (m_serialReader) {
+            // Hiz ve Cozunurluk Ayarlarini Gonder
+            uint32_t speed_us = (uint32_t)((m_secPerRev * 1000000.0f) / 3200.0f);
+            if (speed_us < 200) speed_us = 200; // Guvenlik siniri
+            
+            float activeRes = (m_triggerSource == TriggerSource::StepAngle) ? m_stepResolution : m_as5600Resolution;
+            int srcVal = static_cast<int>(m_triggerSource);
+
+            m_serialReader->sendCommand(QString("TRIG_SRC:%1").arg(srcVal).toStdString());
+            m_serialReader->sendCommand(QString("SPEED:%1").arg(speed_us).toStdString());
+            m_serialReader->sendCommand(QString("RES:%1").arg(activeRes, 0, 'f', 2).toStdString());
+            emit logMessage("SYS", QString("Motor ayarlari gonderildi: Tur=%1 sn (Adim: %2 us), Cozunurluk=%3, Kaynak=%4")
+                                       .arg(m_secPerRev).arg(speed_us).arg(activeRes)
+                                       .arg(srcVal == 0 ? "AS5600" : "Step"));
+
             QString cmd = (direction == 0) ? "START_CW" : "START_CCW";
             m_serialReader->sendCommand(cmd.toStdString());
             emit logMessage("SYS", "Arduino'ya " + cmd + " komutu gonderildi.");
@@ -362,7 +395,12 @@ void ScanController::stopScan()
     emit logMessage("SYS", "Tarama durduruldu — lazer ve tamponlar temizlendi.");
     if (!m_lastCloud.isEmpty()) {
         addNewLayer(m_lastCloud, "Tarama Katmani");
+        // Ham veriyi de originalPoints olarak katmana kaydediyoruz
+        if(m_layers.contains(m_activeLayerId)) {
+            m_layers[m_activeLayerId].originalPoints = m_lastCloudRaw;
+        }
         m_lastCloud.clear();
+        m_lastCloudRaw.clear();
     }
     emit scanStopped();
 }
@@ -552,7 +590,8 @@ void ScanController::consumeHardwarePackets()
             publishProfileFrame(m_hwAngle, profile);
             
             if (!m_serialReader) {
-                m_hwAngle += m_resolution;
+                float activeRes = (m_triggerSource == TriggerSource::StepAngle) ? m_stepResolution : m_as5600Resolution;
+                m_hwAngle += activeRes;
                 if (m_hwAngle >= 360.0f) {
                     stopScan();
                     break;
@@ -591,7 +630,14 @@ void ScanController::publishProfileFrame(float thetaDeg, const QVector<QPointF>&
         if (std::abs(r) < 0.05f) continue;
         float X = r * cosA - lateralOffset * sinA;
         float Y = r * sinA + lateralOffset * cosA;
-        m_lastCloud.push_back(QVector3D(X, Y, z));
+        QVector3D p3d(X, Y, z);
+        m_lastCloudRaw.push_back(p3d);
+        
+        if (m_calibrator && m_calibrator->isCalibrated()) {
+            p3d = m_calibrator->applyTransform(p3d);
+        }
+        
+        m_lastCloud.push_back(p3d);
     }
 
     emit profileFrameReceived(frame);
@@ -625,19 +671,28 @@ void ScanController::setLateralOffset(float mm)
         rebuildSimWorkerIfPossible();
 }
 
-void ScanController::setResolution(float val)
+void ScanController::setAs5600Resolution(float val)
 {
-    m_resolution = val;
-    emit logMessage("SYS", QString("Tarama cozunurlugu guncellendi: %1 deg").arg(m_resolution, 0, 'f', 2));
+    m_as5600Resolution = val;
+    emit logMessage("SYS", QString("AS5600 cozunurlugu guncellendi: %1 deg").arg(m_as5600Resolution, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
 }
 
-void ScanController::setRps(float val)
+void ScanController::setStepResolution(float val)
 {
-    m_rps = val;
-    emit logMessage("SYS", QString("Donus hizi guncellendi: %1 rps").arg(m_rps, 0, 'f', 2));
+    m_stepResolution = val;
+    emit logMessage("SYS", QString("Step cozunurlugu guncellendi: %1 deg").arg(m_stepResolution, 0, 'f', 2));
+
+    if (m_isSimMode && !m_scanning)
+        rebuildSimWorkerIfPossible();
+}
+
+void ScanController::setSecPerRev(float val)
+{
+    m_secPerRev = val;
+    emit logMessage("SYS", QString("Tur suresi guncellendi: %1 sn").arg(m_secPerRev, 0, 'f', 1));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
@@ -666,12 +721,23 @@ void ScanController::setLaserShutterUs(int us)
         return;
     }
 
+    if (m_laser && m_laser->isConnected()) {
+        m_laser->setExposureTimeUs(m_laserShutterUs);
+        m_laser->applyAcquisitionSettings();
+    }
+
     emit logMessage("SYS", QString("Lazer shutter guncellendi: %1 us").arg(m_laserShutterUs));
 }
 
 void ScanController::setLaserAutoShutter(bool enabled)
 {
     m_laserAutoShutter = enabled;
+    
+    if (m_laser && m_laser->isConnected()) {
+        m_laser->setAutoExposure(m_laserAutoShutter);
+        m_laser->applyAcquisitionSettings();
+    }
+    
     emit logMessage("SYS", QString("Otomatik pozlama: %1").arg(enabled ? "acik" : "kapali"));
 }
 
@@ -698,7 +764,32 @@ void ScanController::setTriggerMode(ScanTriggerMode mode)
     emit logMessage("SYS",
                     QString("Tetik modu degistirildi: %1")
                         .arg(names[static_cast<int>(mode)]));
+
+    if (m_laser && m_laser->isConnected()) {
+        if (m_triggerMode == ScanTriggerMode::TimeBased) {
+            m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
+        } else {
+            m_laser->setTriggerMode(LaserManager::TriggerMode::ExternalDigitalIn);
+        }
+        m_laser->applyAcquisitionSettings();
+    }
+
     emit triggerModeChanged(mode);
+}
+
+void ScanController::setTriggerSource(TriggerSource src)
+{
+    if (m_triggerSource == src)
+        return;
+
+    m_triggerSource = src;
+    emit logMessage("SYS", QString("Tetik kaynagi degistirildi: %1")
+                               .arg(src == TriggerSource::AS5600 ? "AS5600" : "Step Acisi"));
+
+    if (m_isSimMode && !m_scanning)
+        rebuildSimWorkerIfPossible();
+    
+    emit triggerSourceChanged(src);
 }
 
 void ScanController::rebuildSimWorkerIfPossible()
@@ -970,6 +1061,85 @@ void ScanController::generateMeshAsync()
     m_watcher.setFuture(future);
 }
 
+void ScanController::start3DCalibrationAsync(int method)
+{
+    QVector<QVector3D> targetCloud = m_lastCloud;
+    if (targetCloud.isEmpty()) {
+        if (m_layers.contains(m_activeLayerId)) {
+            targetCloud = m_layers[m_activeLayerId].points;
+        } else if (!m_layers.isEmpty()) {
+            targetCloud = m_layers.last().points;
+        }
+    }
+
+    if (targetCloud.isEmpty()) {
+        emit logMessage("WARN", "Kalibrasyon icin nokta bulutu yok. Lutfen once kalibrasyon kumesini tarayin.");
+        return;
+    }
+    emit processingStarted("3D PCL Kalibrasyonu Yapiliyor...");
+    if (m_calibrator) {
+        CalibrationMethod calMethod = (method == 1) ? CalibrationMethod::MATH_PCA : CalibrationMethod::PCL_RANSAC;
+        m_calibrator->startCalibration(targetCloud, calMethod);
+    }
+}
+
+void ScanController::reapplyCurrentCalibration()
+{
+    // Mevcut butun layer'lari orijinal noktalar uzerinden tekrar hesapla
+    for (auto it = m_layers.begin(); it != m_layers.end(); ++it) {
+        if (!it->originalPoints.isEmpty()) {
+            it->points.clear();
+            for (const auto& p : it->originalPoints) {
+                it->points.push_back(m_calibrator->applyTransform(p));
+            }
+        }
+    }
+    // m_lastCloud (su an devam eden tarama)
+    if (!m_lastCloudRaw.isEmpty()) {
+        m_lastCloud.clear();
+        for (const auto& p : m_lastCloudRaw) {
+            m_lastCloud.push_back(m_calibrator->applyTransform(p));
+        }
+    }
+    emit layersUpdated();
+    
+    // Ekrani hemen guncelle
+    if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
+        emit pointCloudReady(m_layers[m_activeLayerId].points);
+    } else if (!m_lastCloud.isEmpty()) {
+        emit pointCloudReady(m_lastCloud);
+    }
+}
+
+void ScanController::updateActiveCalibration(QString filePath)
+{
+    if (m_calibrator && m_calibrator->loadCalibration(filePath)) {
+        emit logMessage("OK", QString("Kalibrasyon yuklendi: %1").arg(filePath));
+        reapplyCurrentCalibration();
+    } else {
+        emit logMessage("ERR", "Kalibrasyon dosyasi yuklenemedi!");
+    }
+}
+
+void ScanController::disableCalibration()
+{
+    if (m_calibrator) {
+        m_calibrator->clearCalibration();
+        emit logMessage("SYS", "3D Kalibrasyon devre disi birakildi. Ham verilere donuldu.");
+        
+        // Mevcut butun layer'lari eski haline (ham) cevir
+        for (auto it = m_layers.begin(); it != m_layers.end(); ++it) {
+            if (!it->originalPoints.isEmpty()) {
+                it->points = it->originalPoints;
+            }
+        }
+        if (!m_lastCloudRaw.isEmpty()) {
+            m_lastCloud = m_lastCloudRaw;
+        }
+        emit layersUpdated();
+    }
+}
+
 void ScanController::onMeshFinished()
 {
     QVector<QVector3D> mesh = m_watcher.result();
@@ -1116,3 +1286,45 @@ void ScanController::cancelManualAlignment()
     m_manualAlignBaseCloud.clear();
 }
 
+#include <QtConcurrent>
+#include "../utils/CalibrationEngine.hpp"
+
+void ScanController::autoCalibrateOffsetAsync()
+{
+    QVector<QVector3D> cloudCopy;
+
+    if (!m_lastCloud.isEmpty()) {
+        cloudCopy = m_lastCloud;
+    } else if (m_activeLayerId != -1 && m_layers.contains(m_activeLayerId)) {
+        cloudCopy = m_layers[m_activeLayerId].points;
+    }
+
+    if (cloudCopy.isEmpty()) {
+        emit logMessage("WRN", "Otomatik kalibrasyon icin aktif taranmis veri veya secili bir katman bulunamadi.");
+        return;
+    }
+
+    emit processingStarted("Otomatik Offset Hesaplaniyor");
+
+    float currentOffset = m_lOffset;
+
+    auto future = QtConcurrent::run([cloudCopy, currentOffset]() -> AutoCalibResult {
+        return CalibrationEngine::findOptimalLateralOffset(cloudCopy, currentOffset, -2.0f, 2.0f, 0.05f);
+    });
+
+    auto watcher = new QFutureWatcher<AutoCalibResult>(this);
+    connect(watcher, &QFutureWatcher<AutoCalibResult>::finished, this, [this, watcher]() {
+        AutoCalibResult res = watcher->result();
+        emit processingFinished();
+        
+        if (res.success) {
+            emit logMessage("SYS", QString("Otomatik Kalibrasyon Basarili. En iyi offset: %1 mm (Skor: %2)").arg(res.bestLateralOffset, 0, 'f', 2).arg(res.maxScore, 0, 'f', 0));
+            emit autoCalibrationFinished(res.bestLateralOffset, res.maxScore);
+        } else {
+            emit logMessage("ERR", "Otomatik Kalibrasyon basarisiz oldu.");
+        }
+        watcher->deleteLater();
+    });
+
+    watcher->setFuture(future);
+}

@@ -69,6 +69,9 @@ if(Qt6_FOUND)
 
     find_package(OpenGL REQUIRED)
 
+    find_package(Eigen3 REQUIRED)
+    find_package(PCL REQUIRED COMPONENTS common sample_consensus features filters io segmentation search)
+
     add_executable(preciscan_ui
         app/main_ui.cpp
         app/ui/MainWindow.cpp
@@ -87,6 +90,8 @@ if(Qt6_FOUND)
         app/ui/widgets/ConnectingOverlay.cpp
         app/controller/ScanController.cpp
         app/utils/point_cloud_processor.cpp
+        app/utils/CalibrationEngine.cpp
+        app/utils/AutoCalibrator.cpp
         io/stl_loader.cpp
         io/ply_writer.cpp
         io/serial_trigger_reader.cpp
@@ -94,11 +99,12 @@ if(Qt6_FOUND)
         sim/laser_sim_worker.cpp
         app.rc
     )
-    target_include_directories(preciscan_ui PRIVATE app/ app/ui/ io/ sim/)
+    target_include_directories(preciscan_ui PRIVATE app/ app/ui/ io/ sim/ ${EIGEN3_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
     target_link_libraries(preciscan_ui PRIVATE
         Qt6::Widgets Qt6::OpenGLWidgets Qt6::Concurrent
         OpenGL::GL
         preciscan_net preciscan_hw
+        ${PCL_LIBRARIES}
     )
 
     # Copy LLT.dll to the executable directory
