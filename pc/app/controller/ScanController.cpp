@@ -41,6 +41,23 @@ ScanController::ScanController(McuListener* mcu,
     m_hwTimer = new QTimer(this);
     m_hwTimer->setInterval(0);
     connect(m_hwTimer, &QTimer::timeout, this, &ScanController::consumeHardwarePackets);
+
+    // Lazer baglanti watchdog'u: SDK Connect cagrisi (ag/IP sorununda Windows TCP
+    // timeout'u ~20 sn surebilir) uzarsa kullaniciya 12 sn'de geri bildirim verip
+    // butonu serbest birakir. Worker thread sonucu geldiginde temizlik yapilir.
+    m_laserConnectTimeout = new QTimer(this);
+    m_laserConnectTimeout->setSingleShot(true);
+    m_laserConnectTimeout->setInterval(12000);
+    connect(m_laserConnectTimeout, &QTimer::timeout, this, [this]() {
+        if (!m_laserConnecting)
+            return;
+        m_laserConnectTimedOut = true;
+        emit logMessage("WARN",
+            "Lazer baglanti yaniti 12 sn icinde gelmedi. Cihaz IP'si ile PC Ethernet "
+            "adaptorunuz ayni alt agda mi? (Arka plan denemesi suruyor.)");
+        emit laserConnectFailed(
+            "Zaman asimi — cihaz yanit vermedi.\nPC adaptoru ile lazer ayni alt agda mi?");
+    });
 }
 
 ScanController::~ScanController()
@@ -134,23 +151,34 @@ bool ScanController::validateLaserTiming(QString* errorMsg) const
 
 void ScanController::connectLaser()
 {
+    // Zaten bir baglanti denemesi sürüyorsa tekrar baslatma (cift tiklamaya karsi).
+    if (m_laserConnecting) {
+        emit logMessage("SYS", "Lazer baglanti denemesi zaten devam ediyor, lutfen bekleyin.");
+        return;
+    }
+
     if (!m_laser) {
         emit logMessage("ERR", "LaserManager mevcut degil!");
+        emit laserConnectFailed("LaserManager mevcut degil!");
         return;
     }
 
     QString timingError;
     if (!validateLaserTiming(&timingError)) {
         emit logMessage("ERR", timingError);
+        emit laserConnectFailed(timingError);
         return;
     }
 
+    // init() = DLL yukleme: hizli, UI thread'inde kalabilir.
     if (!m_laser->init()) {
-        emit logMessage("ERR", "Lazer SDK yuklenemedi (LLT.dll)! Lazer bagli mi?");
+        const QString msg = "Lazer SDK yuklenemedi (LLT.dll)! Lazer bagli mi?";
+        emit logMessage("ERR", msg);
+        emit laserConnectFailed(msg);
         return;
     }
 
-    // UI/controller ayarlarini cihaz yoneticisine aktar
+    // UI/controller ayarlarini cihaz yoneticisine aktar (hizli setter'lar)
     m_laser->setProfileRateHz(m_laserProfileRate);
     m_laser->setExposureTimeUs(m_laserShutterUs);
     m_laser->setAutoExposure(m_laserAutoShutter);
@@ -166,15 +194,68 @@ void ScanController::connectLaser()
         emit logMessage("SYS", "Lazer tetik: External/Encoder (donanimsal tetik bekleniyor)");
     }
 
-    if (!m_laser->connect()) {
-        emit logMessage("ERR",
-                        QString("Lazere baglanilamadi! Detay: %1")
-                            .arg(QString::fromStdString(m_laser->getLastError())));
+    // ── Yavas kisim (cihaz kesfi + ag handshake + ayarlar) worker thread'de ──
+    // Bu cagrilar USB->Ethernet ceviricide saniyeler surebilir; UI thread'inde
+    // calistirilirsa arayuz donar. QtConcurrent ile thread havuzuna aliyoruz.
+    m_laserConnecting = true;
+    m_laserConnectTimedOut = false;
+    emit laserConnectStarted();
+    emit logMessage("SYS", "Lazere baglaniliyor... (arka planda)");
+    m_laserConnectTimeout->start();
+
+    disconnect(&m_laserConnectWatcher, &QFutureWatcher<LaserConnectResult>::finished, this, nullptr);
+    connect(&m_laserConnectWatcher, &QFutureWatcher<LaserConnectResult>::finished, this,
+            &ScanController::onLaserConnectFinished);
+
+    LaserManager* laser = m_laser;
+    QFuture<LaserConnectResult> future = QtConcurrent::run([laser]() -> LaserConnectResult {
+        LaserConnectResult r;
+        r.ok = laser->connect();
+        if (!r.ok)
+            r.error = QString::fromStdString(laser->getLastError());
+        return r;
+    });
+    m_laserConnectWatcher.setFuture(future);
+}
+
+void ScanController::onLaserConnectFinished()
+{
+    disconnect(&m_laserConnectWatcher, &QFutureWatcher<LaserConnectResult>::finished, this, nullptr);
+    m_laserConnectTimeout->stop();
+
+    const LaserConnectResult r = m_laserConnectWatcher.result();
+    const bool timedOut = m_laserConnectTimedOut;
+    m_laserConnecting = false;
+    m_laserConnectTimedOut = false;
+
+    // Watchdog daha once devreye girip UI'a 'zaman asimi' bildirdiyse, worker
+    // simdi (gec) dondu. UI'i tekrar 'basarisiz'la bombardiman etmeyiz.
+    if (timedOut) {
+        if (!r.ok) {
+            const QString detail = r.error.isEmpty() ? QString("zaman asimi") : r.error;
+            emit logMessage("ERR", QString("Lazer baglanti denemesi sonuclandi: %1").arg(detail));
+            return;
+        }
+        // Gec gelen basari: cihaz aslinda baglandi. Tutarlilik icin kabul et.
+        m_laser->startAcquisition();
+        m_isSimMode = false;
+        m_laserConnected = true;
+        emit isSimModeChanged(false);
+        emit laserConnectionChanged(true);
+        emit logMessage("OK", "Lazer baglandi (gec yanit).");
         return;
     }
 
-    // Acquisition'ı başlat — External Trigger modunda lazer sadece
-    // Arduino'dan fiziksel tetik geldiğinde profil üretecek.
+    if (!r.ok) {
+        const QString detail = r.error.isEmpty() ? QString("bilinmeyen hata") : r.error;
+        emit logMessage("ERR", QString("Lazere baglanilamadi! Detay: %1").arg(detail));
+        emit laserConnectFailed(QString("Baglanilamadi:\n%1").arg(detail));
+        return;
+    }
+
+    // Baglanti tamam — acquisition'i baslat (hizli). connect() worker thread'de
+    // bitti, bu slot UI thread'inde; ikisi es zamanli degil, yaris yok.
+    // External Trigger modunda lazer sadece Arduino tetigi geldiginde profil uretir.
     m_laser->startAcquisition();
 
     m_isSimMode = false;
@@ -267,6 +348,14 @@ void ScanController::connectLaserSim(const QString& stlPath)
 
 void ScanController::disconnectLaser()
 {
+    // Baglanti worker thread'de hala suruyorsa cihaza dokunma — es zamanli
+    // erisim CInterfaceLLT'yi bozar. Buton UI'da kilitli oldugu icin normalde
+    // buraya girilmez; yine de guvenlik amacli kontrol ediyoruz.
+    if (m_laserConnecting) {
+        emit logMessage("SYS", "Baglanti denemesi suruyor; once tamamlanmasi bekleniyor.");
+        return;
+    }
+
     if (m_laser) {
         m_laser->stopAcquisition();
         m_laser->disconnect();

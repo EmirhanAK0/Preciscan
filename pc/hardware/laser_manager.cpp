@@ -4,6 +4,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <cstdio>
 
 // RT Callback — SDK kendi thread'inden cagiriyor.
 // KURAL: Heap alloc, mutex, I/O yapma! Sadece memcpy.
@@ -203,22 +204,39 @@ bool LaserManager::connect()
 
     unsigned int devList[6] = {};
     int nFound = 0;
-    
-    // Cihaz agda hemen bulunamayabilir (broadcast yanit suresi), bu yuzden Configuration Tools 
-    // gibi birkac kez tekrar denememiz gerekiyor.
-    for (int retry = 0; retry < 5; ++retry)
+
+    // Cihaz agda hemen bulunamayabilir (broadcast yanit suresi), bu yuzden Configuration Tools
+    // gibi birkac kez tekrar denememiz gerekiyor. USB->Ethernet ceviricide yanit gecikebildigi
+    // icin pencereyi biraz genis tutuyoruz (~4 sn).
+    for (int retry = 0; retry < 8; ++retry)
     {
         nFound = m_llt->GetDeviceInterfaces(devList, 6);
         if (nFound >= 1)
             break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    
+
     std::cout << "[LAZER] GetDeviceInterfaces = " << nFound << " cihaz\n";
     if (nFound < 1)
     {
-        m_lastError = "Agda scanCONTROL bulunamadi";
+        m_deviceIp.clear();
+        m_lastError = "Agda scanCONTROL bulunamadi (cihaz acik ve ayni ag/adaptore bagli mi?)";
         return false;
+    }
+
+    // Kesfedilen cihaz IP'sini cozumle (a.b.c.d). Deger inet/network-order:
+    // dusuk bayt ilk oktet. Tani ve ag ayari icin loglariz.
+    {
+        const unsigned int ip = devList[0];
+        char buf[32] = {};
+        std::snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+                      (ip)       & 0xFF,
+                      (ip >> 8)  & 0xFF,
+                      (ip >> 16) & 0xFF,
+                      (ip >> 24) & 0xFF);
+        m_deviceIp = buf;
+        std::cout << "[LAZER] Cihaz bulundu: " << m_deviceIp
+                  << " (toplam " << nFound << " cihaz)\n";
     }
 
     m_llt->SetDeviceInterface(devList[0], 0);
@@ -229,7 +247,11 @@ bool LaserManager::connect()
     {
         char err[256] = {};
         m_llt->TranslateErrorValue(connRet, err, sizeof(err));
-        m_lastError = std::string("Connect basarisiz: ") + err;
+        // Cihaz kesfedildi ama baglanti kurulamadi: neredeyse her zaman alt-ag (subnet)
+        // uyusmazligi. PC adaptor IP'si cihazla ayni /24 blokta olmalidir.
+        m_lastError = std::string("Connect basarisiz (") + err + "). Cihaz IP'si "
+                    + m_deviceIp + " — PC Ethernet adaptorunuz ayni alt agda mi? "
+                    + "(or. cihaz 192.168.1.x ise PC 192.168.1.50 / 255.255.255.0)";
         return false;
     }
 

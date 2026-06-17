@@ -33,6 +33,7 @@ private:
     QLabel*  m_textLabel;
     QTimer*  m_spinTimer;
     QTimer*  m_closeTimer;
+    QTimer*  m_timeoutTimer;   ///< "Baglaniyor" fazinda takili kalmaya karsi guvenlik
     int      m_spinAngle   = 0;
     bool     m_spinning    = false;
 

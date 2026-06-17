@@ -29,6 +29,8 @@ public slots:
     void onStateChanged(AppState newState);
     void onMcuConnectionChanged(bool connected);
     void onLaserConnectionChanged(bool connected);
+    void onLaserConnectStarted();
+    void onLaserConnectFailed(const QString& reason);
     void onProcessingStarted(const QString& taskName);
     void onProcessingFinished();
 

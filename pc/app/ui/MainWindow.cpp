@@ -67,6 +67,10 @@ MainWindow::MainWindow(McuListener* mcu, LaserManager* laser, SPSCRingBuffer* ri
             &MainWindow::onMcuConnectionChanged);
     connect(m_scanController, &ScanController::laserConnectionChanged, this,
             &MainWindow::onLaserConnectionChanged);
+    connect(m_scanController, &ScanController::laserConnectStarted, this,
+            &MainWindow::onLaserConnectStarted);
+    connect(m_scanController, &ScanController::laserConnectFailed, this,
+            &MainWindow::onLaserConnectFailed);
 
     onStateChanged(m_stateMachine->currentState());
     onMcuConnectionChanged(false);
@@ -293,20 +297,40 @@ void MainWindow::onMcuConnectionChanged(bool connected)
 
 void MainWindow::onLaserConnectionChanged(bool connected)
 {
+    // Baglanti denemesi bitti — butonu tekrar etkinlestir.
+    m_laserBtn->setEnabled(true);
     updateConnectButton(m_laserBtn, connected, "Lazer");
     m_laserBtn->setChecked(connected);
     m_laserStatusLabel->setText(connected ? "Lazer: Bagli" : "Lazer: Bagli degil");
     m_laserStatusLabel->setStyleSheet(connected ? "color:#2ecc71;font-size:11px;padding:0 6px;"
                                                 : "color:#e74c3c;font-size:11px;padding:0 6px;");
 
-    // Overlay'i sonuca gore guncelle (sadece overlay aciksa)
-    if (m_connectingOverlay && m_connectingOverlay->isVisible())
-    {
-        if (connected)
-            m_connectingOverlay->showSuccess();
-        else
-            m_connectingOverlay->showError("Baglanilamadi");
-    }
+    // Basari durumunda overlay'i guncelle. Hata durumu artik onLaserConnectFailed
+    // tarafindan, gercek hata metniyle ele aliniyor.
+    if (connected && m_connectingOverlay && m_connectingOverlay->isVisible())
+        m_connectingOverlay->showSuccess();
+}
+
+void MainWindow::onLaserConnectStarted()
+{
+    // Arka plan baglanti denemesi suruyor: cift tiklamayi/yaris durumunu onlemek
+    // icin butonu gecici olarak kilitle.
+    m_laserBtn->setEnabled(false);
+    m_laserStatusLabel->setText("Lazer: Baglaniliyor...");
+    m_laserStatusLabel->setStyleSheet("color:#f1c40f;font-size:11px;padding:0 6px;");
+}
+
+void MainWindow::onLaserConnectFailed(const QString& reason)
+{
+    // Butonu eski (bagli degil) duruma dondur ve tekrar etkinlestir.
+    m_laserBtn->setEnabled(true);
+    m_laserBtn->setChecked(false);
+    updateConnectButton(m_laserBtn, false, "Lazer");
+    m_laserStatusLabel->setText("Lazer: Bagli degil");
+    m_laserStatusLabel->setStyleSheet("color:#e74c3c;font-size:11px;padding:0 6px;");
+
+    if (m_connectingOverlay)
+        m_connectingOverlay->showError(reason);
 }
 
 void MainWindow::onProcessingStarted(const QString& taskName)

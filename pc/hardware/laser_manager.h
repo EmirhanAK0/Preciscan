@@ -47,6 +47,12 @@ public:
         return m_lastError;
     }
 
+    /// En son kesfedilen cihaz IP'si (a.b.c.d). Tani/ag ayari icin.
+    std::string deviceIp() const
+    {
+        return m_deviceIp;
+    }
+
     bool isConnected() const
     {
         return m_connected;
@@ -99,6 +105,7 @@ private:
 private:
     std::string m_dllPath;
     std::string m_lastError;
+    std::string m_deviceIp;
 
     CInterfaceLLT* m_llt = nullptr;
     IDataSink* m_sink    = nullptr;

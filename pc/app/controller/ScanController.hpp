@@ -44,6 +44,12 @@ enum class TriggerSource {
     StepAngle = 1   ///< Motor adımları üzerinden hesaplanan açı
 };
 
+/// Lazer bağlantısının (worker thread'de koşan) sonucu.
+struct LaserConnectResult {
+    bool    ok = false;
+    QString error;
+};
+
 class McuListener;
 class LaserManager;
 class SPSCRingBuffer;
@@ -146,6 +152,10 @@ public slots:
 signals:
     void mcuConnectionChanged(bool connected);
     void laserConnectionChanged(bool connected);
+    /// Lazer bağlantısı başladı (arka plan denemesi). UI butonu kilitlemek için.
+    void laserConnectStarted();
+    /// Lazer bağlantısı başarısız oldu; reason kullanıcıya gösterilebilir.
+    void laserConnectFailed(const QString& reason);
     void isSimModeChanged(bool isSim);
     void scanStarted();
     void scanStopped();
@@ -206,6 +216,8 @@ private slots:
     void onMeshFinished();
     void onFilterFinished();
     void onIcpFinished();
+    /// Worker thread'deki lazer bağlantısı bittiğinde (UI thread'de) çağrılır.
+    void onLaserConnectFinished();
 
 
 private:
@@ -296,6 +308,13 @@ private:
     
     QFutureWatcher<core::MergeResult> m_icpWatcher;
     bool m_icpRunning = false;
+
+    // Lazer bağlantısı (asenkron) — UI thread'ini bloklamamak için worker thread'de koşar.
+    QFutureWatcher<LaserConnectResult> m_laserConnectWatcher;
+    std::atomic<bool> m_laserConnecting{false};
+    /// SDK Connect çağrısı uzarsa UI'ı serbest bırakmak için watchdog.
+    QTimer* m_laserConnectTimeout{nullptr};
+    bool m_laserConnectTimedOut{false};
     
     QString m_currentTaskName;
     

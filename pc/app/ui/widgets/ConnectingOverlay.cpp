@@ -46,6 +46,17 @@ ConnectingOverlay::ConnectingOverlay(QWidget* parent) : QWidget(parent, Qt::Widg
                 stopSpinner();
             });
 
+    // Guvenlik zaman asimi: "Baglaniyor" fazinda bir sonuc sinyali gelmezse
+    // overlay sonsuza kadar takili kalmasin diye hata gosterip kapanir.
+    m_timeoutTimer = new QTimer(this);
+    m_timeoutTimer->setSingleShot(true);
+    connect(m_timeoutTimer, &QTimer::timeout, this,
+            [this]
+            {
+                if (m_phase == Phase::Connecting)
+                    showError("Zaman asimi — baglanti yanit vermedi");
+            });
+
     hide();
     reposition();
 }
@@ -61,11 +72,14 @@ void ConnectingOverlay::showConnecting()
     show();
     raise();
     startSpinner();
+    // Bir sonuc sinyali (basari/hata) gelmezse en gec 25 sn sonra kendini kapat.
+    m_timeoutTimer->start(25000);
 }
 
 void ConnectingOverlay::showSuccess()
 {
     stopSpinner();
+    m_timeoutTimer->stop();
     m_phase = Phase::Success;
     m_iconLabel->setText("✓");
     m_iconLabel->setStyleSheet("font-size: 28px; color: #2ecc71;");
@@ -78,6 +92,7 @@ void ConnectingOverlay::showSuccess()
 void ConnectingOverlay::showError(const QString& msg)
 {
     stopSpinner();
+    m_timeoutTimer->stop();
     m_phase = Phase::Error;
     m_iconLabel->setText("✗");
     m_iconLabel->setStyleSheet("font-size: 28px; color: #e74c3c;");
