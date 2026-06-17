@@ -97,7 +97,7 @@ void MainWindow::setupToolBar()
     m_comPortCombo->setCurrentText("COM3");
     tb->addWidget(m_comPortCombo);
 
-    m_mcuBtn = new QPushButton("MCU  Baglan", this);
+    m_mcuBtn = new QPushButton("MCU  Connect", this);
     m_mcuBtn->setCheckable(true);
     connect(m_mcuBtn, &QPushButton::clicked, this,
             [this](bool checked)
@@ -124,7 +124,7 @@ void MainWindow::setupToolBar()
     spacerR->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     tb->addWidget(spacerR);
 
-    m_laserBtn = new QPushButton("Lazer  Baglan", this);
+    m_laserBtn = new QPushButton("Laser  Connect", this);
     m_laserBtn->setCheckable(true);
     connect(m_laserBtn, &QPushButton::clicked, this,
             [this](bool checked)
@@ -224,7 +224,7 @@ void MainWindow::setupCentralWidget()
                     mcuCounter = 0;
                     scanPanel->appendLog(
                         "MCU",
-                        QString("Sinyal Aliniyor... Tetik:%1 Aci:%2 deg").arg(seq).arg(y, 0, 'f', 2));
+                        QString("Receiving signal... Trigger:%1 Angle:%2 deg").arg(seq).arg(y, 0, 'f', 2));
                 }
             });
 
@@ -251,11 +251,11 @@ void MainWindow::setupStatusBar()
     sb->addWidget(m_stateLabel);
 
     sb->addWidget(dotLabel("|", "#333", this));
-    m_mcuStatusLabel = dotLabel("MCU: Bagli degil", "#e74c3c", this);
+    m_mcuStatusLabel = dotLabel("MCU: Disconnected", "#e74c3c", this);
     sb->addWidget(m_mcuStatusLabel);
 
     sb->addWidget(dotLabel("|", "#333", this));
-    m_laserStatusLabel = dotLabel("Lazer: Bagli degil", "#e74c3c", this);
+    m_laserStatusLabel = dotLabel("Laser: Disconnected", "#e74c3c", this);
     sb->addWidget(m_laserStatusLabel);
 
     sb->addPermanentWidget(dotLabel("Preciscan v2.1", "#333", this));
@@ -272,14 +272,14 @@ void MainWindow::updateConnectButton(QPushButton* btn, bool connected, const QSt
 {
     if (connected)
     {
-        btn->setText(baseName + "  Baglidir");
+        btn->setText(baseName + "  Connected");
         btn->setStyleSheet("QPushButton{background:#0d2a0d;color:#2ecc71;border:1px solid "
                            "#2ecc71;border-radius:4px;font-size:10px;font-weight:bold;padding:5px "
                            "12px;} QPushButton:hover{background:#0d3a0d;}");
     }
     else
     {
-        btn->setText(baseName + "  Baglan");
+        btn->setText(baseName + "  Connect");
         btn->setStyleSheet("QPushButton{background:#1e1e1e;color:#888;border:1px solid "
                            "#444;border-radius:4px;font-size:10px;font-weight:bold;padding:5px "
                            "12px;} QPushButton:hover{background:#2a2a2a;color:#bbb;}");
@@ -290,7 +290,7 @@ void MainWindow::onMcuConnectionChanged(bool connected)
 {
     updateConnectButton(m_mcuBtn, connected, "MCU");
     m_mcuBtn->setChecked(connected);
-    m_mcuStatusLabel->setText(connected ? "MCU: Bagli" : "MCU: Bagli degil");
+    m_mcuStatusLabel->setText(connected ? "MCU: Connected" : "MCU: Disconnected");
     m_mcuStatusLabel->setStyleSheet(connected ? "color:#2ecc71;font-size:11px;padding:0 6px;"
                                               : "color:#e74c3c;font-size:11px;padding:0 6px;");
 }
@@ -299,9 +299,9 @@ void MainWindow::onLaserConnectionChanged(bool connected)
 {
     // Baglanti denemesi bitti — butonu tekrar etkinlestir.
     m_laserBtn->setEnabled(true);
-    updateConnectButton(m_laserBtn, connected, "Lazer");
+    updateConnectButton(m_laserBtn, connected, "Laser");
     m_laserBtn->setChecked(connected);
-    m_laserStatusLabel->setText(connected ? "Lazer: Bagli" : "Lazer: Bagli degil");
+    m_laserStatusLabel->setText(connected ? "Laser: Connected" : "Laser: Disconnected");
     m_laserStatusLabel->setStyleSheet(connected ? "color:#2ecc71;font-size:11px;padding:0 6px;"
                                                 : "color:#e74c3c;font-size:11px;padding:0 6px;");
 
@@ -316,7 +316,7 @@ void MainWindow::onLaserConnectStarted()
     // Arka plan baglanti denemesi suruyor: cift tiklamayi/yaris durumunu onlemek
     // icin butonu gecici olarak kilitle.
     m_laserBtn->setEnabled(false);
-    m_laserStatusLabel->setText("Lazer: Baglaniliyor...");
+    m_laserStatusLabel->setText("Laser: Connecting...");
     m_laserStatusLabel->setStyleSheet("color:#f1c40f;font-size:11px;padding:0 6px;");
 }
 
@@ -325,8 +325,8 @@ void MainWindow::onLaserConnectFailed(const QString& reason)
     // Butonu eski (bagli degil) duruma dondur ve tekrar etkinlestir.
     m_laserBtn->setEnabled(true);
     m_laserBtn->setChecked(false);
-    updateConnectButton(m_laserBtn, false, "Lazer");
-    m_laserStatusLabel->setText("Lazer: Bagli degil");
+    updateConnectButton(m_laserBtn, false, "Laser");
+    m_laserStatusLabel->setText("Laser: Disconnected");
     m_laserStatusLabel->setStyleSheet("color:#e74c3c;font-size:11px;padding:0 6px;");
 
     if (m_connectingOverlay)

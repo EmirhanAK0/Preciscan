@@ -26,7 +26,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     layout->setContentsMargins(15, 15, 15, 15);
     layout->setSpacing(10);
 
-    auto* group = new QGroupBox("Lazer & Tarama Parametreleri", this);
+    auto* group = new QGroupBox("Laser & Scan Parameters", this);
     group->setStyleSheet(
         "QGroupBox {"
         "  color: #aaa;"
@@ -51,10 +51,10 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_dOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_dOffsetSpin);
 
-    m_diamCalibBtn = new QPushButton("Çap Kalib.", this);
+    m_diamCalibBtn = new QPushButton("Dia. Calib.", this);
     m_diamCalibBtn->setToolTip(
-        "Bilinen çaplı silindir taramasından dOffset'i kalibre eder.\n"
-        "Silindiri tabla merkezine yakın koyup tarayın, sonra bu butona basın.");
+        "Calibrates dOffset from a scan of a cylinder with a known diameter.\n"
+        "Place the cylinder near the table center, scan it, then press this button.");
     m_diamCalibBtn->setStyleSheet(
         "QPushButton {"
         "  background: #2a4a6a;"
@@ -80,8 +80,8 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_lOffsetSpin->setSuffix(" mm");
     applySpinStyle(m_lOffsetSpin);
 
-    m_autoCalibBtn = new QPushButton("Oto. Bul", this);
-    m_autoCalibBtn->setToolTip("Son taramayi baz alip en iyi lateral offseti otomatik hesaplar.");
+    m_autoCalibBtn = new QPushButton("Auto Find", this);
+    m_autoCalibBtn->setToolTip("Automatically computes the best lateral offset based on the last scan.");
     m_autoCalibBtn->setStyleSheet(
         "QPushButton {"
         "  background: #2a4a6a;"
@@ -109,10 +109,10 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_zBaseSpin->setSuffix(" mm");
     applySpinStyle(m_zBaseSpin);
 
-    m_autoZeroBtn = new QPushButton("Tabanı Sıfırla", this);
+    m_autoZeroBtn = new QPushButton("Zero Base", this);
     m_autoZeroBtn->setToolTip(
-        "Aktif katmanın taban düzlemini (tabla yüzeyini) otomatik bulup\n"
-        "z=0'a oturtur. Katman ham veriden yeniden projekte edilir.");
+        "Automatically finds the active layer's base plane (table surface)\n"
+        "and sets it to z=0. The layer is re-projected from raw data.");
     m_autoZeroBtn->setStyleSheet(
         "QPushButton {"
         "  background: #2a4a6a;"
@@ -160,17 +160,17 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_pointsPerProfileCombo->addItems({"1280", "640", "320", "160"});
     applySpinStyle(m_pointsPerProfileCombo);
 
-    form->addRow("Lazer Ofseti (Z):", dOffsetLayout);
-    form->addRow("Lateral Ofset (X):", lOffsetLayout);
-    form->addRow("Yükseklik Tabanı (Z0):", zBaseLayout);
-    form->addRow("AS5600 Çözünürlüğü:", m_as5600ResSpin);
-    form->addRow("Step Çözünürlüğü:", m_stepResSpin);
-    form->addRow("Profil Hızı (Hz):", m_profileRateSpin);
-    form->addRow("Olcum Alani:", m_measuringFieldCombo);
-    form->addRow("Profil Nokta Sayisi:", m_pointsPerProfileCombo);
+    form->addRow("Laser Offset (Z):", dOffsetLayout);
+    form->addRow("Lateral Offset (X):", lOffsetLayout);
+    form->addRow("Height Base (Z0):", zBaseLayout);
+    form->addRow("AS5600 Resolution:", m_as5600ResSpin);
+    form->addRow("Step Resolution:", m_stepResSpin);
+    form->addRow("Profile Rate (Hz):", m_profileRateSpin);
+    form->addRow("Measuring Field:", m_measuringFieldCombo);
+    form->addRow("Points per Profile:", m_pointsPerProfileCombo);
 
-    m_readBtn = new QPushButton("Cihazdan Oku", this);
-    m_applyBtn = new QPushButton("Uygula", this);
+    m_readBtn = new QPushButton("Read from Device", this);
+    m_applyBtn = new QPushButton("Apply", this);
 
     m_readBtn->setStyleSheet(
         "QPushButton {"
@@ -202,7 +202,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     layout->addWidget(group);
 
     // ── Tetik Modu ──────────────────────────────────────────────
-    auto* trigGroup = new QGroupBox("Tetik Modu", this);
+    auto* trigGroup = new QGroupBox("Trigger Mode", this);
     trigGroup->setStyleSheet(
         "QGroupBox {"
         "  color: #5af;"
@@ -219,60 +219,60 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     trigForm->setVerticalSpacing(10);
 
     m_triggerSourceCombo = new QComboBox(this);
-    m_triggerSourceCombo->addItem("AS5600 (Manyetik Enkoder)",
+    m_triggerSourceCombo->addItem("AS5600 (Magnetic Encoder)",
                                   QVariant::fromValue(static_cast<int>(TriggerSource::AS5600)));
-    m_triggerSourceCombo->addItem("Step Açısı (Motor Adımı)",
+    m_triggerSourceCombo->addItem("Step Angle (Motor Step)",
                                   QVariant::fromValue(static_cast<int>(TriggerSource::StepAngle)));
     m_triggerSourceCombo->setCurrentIndex(0); // Default to AS5600
     applySpinStyle(m_triggerSourceCombo);
 
     m_triggerModeCombo = new QComboBox(this);
-    m_triggerModeCombo->addItem("Time-Based (Zamanlayıcı)",
+    m_triggerModeCombo->addItem("Time-Based (Timer)",
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::TimeBased)));
-    m_triggerModeCombo->addItem("Encoder Trigger (Enkoder)",
+    m_triggerModeCombo->addItem("Encoder Trigger",
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::Encoder)));
-    m_triggerModeCombo->addItem("External Trigger (Harici)",
+    m_triggerModeCombo->addItem("External Trigger",
                                 QVariant::fromValue(static_cast<int>(ScanTriggerMode::ExternalTrigger)));
     m_triggerModeCombo->setCurrentIndex(1); // Default to Encoder
     applySpinStyle(m_triggerModeCombo);
 
     auto* trigInfoLabel = new QLabel(
         "<ul style='color:#777;font-size:9px;margin:0;padding-left:14px;'>"
-        "<li><b style='color:#aaa'>Time-Based:</b> Dahili zamanlayici ile sabit adim</li>"
-        "<li><b style='color:#5af'>Encoder:</b> MCU enkoder acisi her profilin konumunu belirler</li>"
-        "<li><b style='color:#fa5'>External:</b> Harici dijital tetik sinyali ile tek profil</li>"
+        "<li><b style='color:#aaa'>Time-Based:</b> Fixed step via internal timer</li>"
+        "<li><b style='color:#5af'>Encoder:</b> MCU encoder angle sets each profile's position</li>"
+        "<li><b style='color:#fa5'>External:</b> One profile per external digital trigger</li>"
         "</ul>",
         this);
     trigInfoLabel->setWordWrap(true);
 
-    trigForm->addRow("Kaynak:", m_triggerSourceCombo);
-    trigForm->addRow("Mod:", m_triggerModeCombo);
+    trigForm->addRow("Source:", m_triggerSourceCombo);
+    trigForm->addRow("Mode:", m_triggerModeCombo);
     trigForm->addRow(trigInfoLabel);
 
     layout->addWidget(trigGroup);
 
     // --- KALİBRASYON YÖNETİMİ GRUBU ---
-    QGroupBox* calibGroup = new QGroupBox("3D Kalibrasyon Yönetimi", this);
+    QGroupBox* calibGroup = new QGroupBox("3D Calibration Management", this);
     QVBoxLayout* calibLayout = new QVBoxLayout(calibGroup);
 
     m_calibMethodCombo = new QComboBox(this);
-    m_calibMethodCombo->addItem("Yöntem: PCL (Yüzey Taraması)", 0);
-    m_calibMethodCombo->addItem("Yöntem: Matematiksel (PCA)", 1);
+    m_calibMethodCombo->addItem("Method: PCL (Surface Scan)", 0);
+    m_calibMethodCombo->addItem("Method: Mathematical (PCA)", 1);
     m_calibMethodCombo->setCurrentIndex(1); // Varsayılan Matematiksel (PCA)
     
-    m_start3DCalibBtn = new QPushButton("Yeni 3D Kalibrasyon Başlat", this);
+    m_start3DCalibBtn = new QPushButton("Start New 3D Calibration", this);
     m_start3DCalibBtn->setStyleSheet("background-color: #8B0000; color: white; font-weight: bold;");
 
     QHBoxLayout* calibControlLayout = new QHBoxLayout();
     m_calibProfileCombo = new QComboBox(this);
-    m_loadCalibBtn = new QPushButton("Uygula", this);
-    m_clearCalibBtn = new QPushButton("Sıfırla/Kapat", this);
+    m_loadCalibBtn = new QPushButton("Apply", this);
+    m_clearCalibBtn = new QPushButton("Reset/Disable", this);
     
     calibControlLayout->addWidget(m_calibProfileCombo, 1);
     calibControlLayout->addWidget(m_loadCalibBtn);
     calibControlLayout->addWidget(m_clearCalibBtn);
 
-    m_saveAsCalibBtn = new QPushButton("Farklı Kaydet...", this);
+    m_saveAsCalibBtn = new QPushButton("Save As...", this);
 
     calibLayout->addWidget(m_calibMethodCombo);
     calibLayout->addWidget(m_start3DCalibBtn);
@@ -308,13 +308,13 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
 
         // Bilinen cap + z-bandi giris dialogu
         QDialog dlg(this);
-        dlg.setWindowTitle("Çap Kalibrasyonu (dOffset)");
+        dlg.setWindowTitle("Diameter Calibration (dOffset)");
         auto* dlgLayout = new QVBoxLayout(&dlg);
 
         auto* info = new QLabel(
-            "Bilinen çaplı silindirin taramasını aktif katman yapın.\n"
-            "Z bandını silindirin DÜZ gövdesinden seçin (taban geçişinden\n"
-            "ve üst yüzeyden uzak durun).", &dlg);
+            "Make the scan of the known-diameter cylinder the active layer.\n"
+            "Select the Z band from the cylinder's STRAIGHT body (stay away\n"
+            "from the base transition and the top surface).", &dlg);
         dlgLayout->addWidget(info);
 
         auto* formL = new QFormLayout();
@@ -342,19 +342,19 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
         maxRadiusSpin->setValue(40.0);
         maxRadiusSpin->setSuffix(" mm");
         maxRadiusSpin->setToolTip(
-            "Eksenden bu yarıçapın dışındaki noktalar fit'e alınmaz.\n"
-            "Tabla çevresindeki dış çeper/halkayı elemek için silindir\n"
-            "yarıçapından büyük ama çeper yarıçapından küçük seçin.");
+            "Points outside this radius from the axis are excluded from the fit.\n"
+            "To remove the outer rim/ring around the table, choose a value larger\n"
+            "than the cylinder radius but smaller than the rim radius.");
 
-        formL->addRow("Bilinen çap (kumpas):", diamSpin);
-        formL->addRow("Bant Z min:", zMinSpin);
-        formL->addRow("Bant Z max:", zMaxSpin);
-        formL->addRow("Maks. yarıçap (çeper filtresi):", maxRadiusSpin);
+        formL->addRow("Known diameter (caliper):", diamSpin);
+        formL->addRow("Band Z min:", zMinSpin);
+        formL->addRow("Band Z max:", zMaxSpin);
+        formL->addRow("Max radius (rim filter):", maxRadiusSpin);
         dlgLayout->addLayout(formL);
 
         auto* btnRow = new QHBoxLayout();
-        auto* okBtn = new QPushButton("Hesapla", &dlg);
-        auto* cancelBtn = new QPushButton("İptal", &dlg);
+        auto* okBtn = new QPushButton("Calculate", &dlg);
+        auto* cancelBtn = new QPushButton("Cancel", &dlg);
         okBtn->setDefault(true);
         btnRow->addStretch();
         btnRow->addWidget(cancelBtn);
@@ -375,13 +375,13 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     connect(m_ctrl, &ScanController::diameterCalibrationFinished, this,
             [this](bool success, QString report, float suggestedDOffset) {
         if (!success) {
-            QMessageBox::warning(this, "Çap Kalibrasyonu", report);
+            QMessageBox::warning(this, "Diameter Calibration", report);
             return;
         }
         const auto answer = QMessageBox::question(
-            this, "Çap Kalibrasyonu",
-            report + "\n\nÖnerilen dOffset uygulansın mı?\n"
-                     "(Aktif katman ham veriden yeniden projekte edilir.)",
+            this, "Diameter Calibration",
+            report + "\n\nApply the suggested dOffset?\n"
+                     "(The active layer is re-projected from raw data.)",
             QMessageBox::Yes | QMessageBox::No);
         if (answer == QMessageBox::Yes) {
             m_dOffsetSpin->setValue(suggestedDOffset);
@@ -392,8 +392,8 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
         if (m_ctrl) m_ctrl->start3DCalibrationAsync(m_calibMethodCombo->currentIndex());
     });
     connect(m_ctrl, &ScanController::autoCalibrationFinished, this, [this](float bestOffset, double score) {
-        QMessageBox::information(this, "Otomatik Kalibrasyon",
-            QString("Hesaplama tamamlandi!\n\nBulunan en iyi Lateral Offset: %1 mm\n\nBu deger sisteme uygulandi.").arg(bestOffset));
+        QMessageBox::information(this, "Auto Calibration",
+            QString("Calculation complete!\n\nBest lateral offset found: %1 mm\n\nThis value has been applied to the system.").arg(bestOffset));
         m_lOffsetSpin->setValue(bestOffset);
         // Degeri gercekten uygula: ham verisi olan aktif katman varsa
         // yeni offset ile otomatik olarak yeniden projekte edilir.
@@ -401,9 +401,9 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     });
     connect(m_ctrl, &ScanController::calibration3DFinished, this, [this](bool success, QString report) {
         if (success) {
-            QMessageBox::information(this, "3D PCL Kalibrasyonu Başarılı", report);
+            QMessageBox::information(this, "3D PCL Calibration Successful", report);
         } else {
-            QMessageBox::warning(this, "3D PCL Kalibrasyonu Başarısız", report);
+            QMessageBox::warning(this, "3D PCL Calibration Failed", report);
         }
     });
 
@@ -417,13 +417,13 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
 
     connect(m_clearCalibBtn, &QPushButton::clicked, this, [this]() {
         m_ctrl->disableCalibration();
-        QMessageBox::information(this, "Sıfırlandı", "Kalibrasyon devre dışı bırakıldı. Tüm noktalar ham hallerine döndürüldü.");
+        QMessageBox::information(this, "Reset", "Calibration disabled. All points reverted to their raw state.");
     });
 
     connect(m_saveAsCalibBtn, &QPushButton::clicked, this, [this]() {
         bool ok;
-        QString text = QInputDialog::getText(this, tr("Farklı Kaydet"),
-                                             tr("Kalibrasyon Dosya İsmi:"), QLineEdit::Normal,
+        QString text = QInputDialog::getText(this, tr("Save As"),
+                                             tr("Calibration File Name:"), QLineEdit::Normal,
                                              "calibration_new", &ok);
         if (ok && !text.isEmpty()) {
             if (!text.endsWith(".json")) text += ".json";
@@ -431,12 +431,12 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
             AutoCalibrator tempCalibrator; 
             tempCalibrator.setTransform(m_ctrl->getCalibrator()->getTransform());
             if (tempCalibrator.saveCalibration(text)) {
-                QMessageBox::information(this, "Kaydedildi", text + " basariyla kaydedildi.");
+                QMessageBox::information(this, "Saved", text + " saved successfully.");
                 refreshCalibrationList();
                 int idx = m_calibProfileCombo->findText(text);
                 if (idx >= 0) m_calibProfileCombo->setCurrentIndex(idx);
             } else {
-                QMessageBox::warning(this, "Hata", "Dosya kaydedilemedi!");
+                QMessageBox::warning(this, "Error", "File could not be saved!");
             }
         }
     });

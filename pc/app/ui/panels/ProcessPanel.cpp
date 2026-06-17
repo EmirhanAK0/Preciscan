@@ -30,17 +30,17 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     mainLayout->setSpacing(10);
 
     // Voxel Grid Filter
-    QGroupBox* gbVoxel = new QGroupBox("Voxel Grid (Seyreltme)", this);
+    QGroupBox* gbVoxel = new QGroupBox("Voxel Grid (Downsample)", this);
     QVBoxLayout* lVoxel = new QVBoxLayout(gbVoxel);
     QHBoxLayout* hVoxel = new QHBoxLayout();
-    hVoxel->addWidget(new QLabel("Küp Boyutu (mm):", this));
+    hVoxel->addWidget(new QLabel("Cube Size (mm):", this));
     m_voxelLeafSpin = new QDoubleSpinBox(this);
     m_voxelLeafSpin->setRange(0.1, 50.0);
     m_voxelLeafSpin->setValue(1.0);
     m_voxelLeafSpin->setSingleStep(0.5);
     hVoxel->addWidget(m_voxelLeafSpin);
     lVoxel->addLayout(hVoxel);
-    QPushButton* btnVoxel = new QPushButton("Seyrelt (Downsample)", this);
+    QPushButton* btnVoxel = new QPushButton("Downsample", this);
     lVoxel->addWidget(btnVoxel);
     mainLayout->addWidget(gbVoxel);
 
@@ -48,21 +48,21 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     QGroupBox* gbSOR = new QGroupBox("Statistical Outlier Removal (SOR)", this);
     QVBoxLayout* lSOR = new QVBoxLayout(gbSOR);
     QHBoxLayout* hSOR1 = new QHBoxLayout();
-    hSOR1->addWidget(new QLabel("Komşu Sayısı:", this));
+    hSOR1->addWidget(new QLabel("Neighbor Count:", this));
     m_sorNeighborsSpin = new QSpinBox(this);
     m_sorNeighborsSpin->setRange(1, 200);
     m_sorNeighborsSpin->setValue(50);
     hSOR1->addWidget(m_sorNeighborsSpin);
     lSOR->addLayout(hSOR1);
     QHBoxLayout* hSOR2 = new QHBoxLayout();
-    hSOR2->addWidget(new QLabel("Standart Sapma:", this));
+    hSOR2->addWidget(new QLabel("Std Deviation:", this));
     m_sorStdDevSpin = new QDoubleSpinBox(this);
     m_sorStdDevSpin->setRange(0.1, 10.0);
     m_sorStdDevSpin->setValue(1.0);
     m_sorStdDevSpin->setSingleStep(0.1);
     hSOR2->addWidget(m_sorStdDevSpin);
     lSOR->addLayout(hSOR2);
-    QPushButton* btnSOR = new QPushButton("Gürültüyü Temizle (SOR)", this);
+    QPushButton* btnSOR = new QPushButton("Remove Noise (SOR)", this);
     lSOR->addWidget(btnSOR);
     mainLayout->addWidget(gbSOR);
 
@@ -70,7 +70,7 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     QGroupBox* gbROR = new QGroupBox("Radius Outlier Removal (ROR)", this);
     QVBoxLayout* lROR = new QVBoxLayout(gbROR);
     QHBoxLayout* hROR1 = new QHBoxLayout();
-    hROR1->addWidget(new QLabel("Yarıçap (mm):", this));
+    hROR1->addWidget(new QLabel("Radius (mm):", this));
     m_rorRadiusSpin = new QDoubleSpinBox(this);
     m_rorRadiusSpin->setRange(0.1, 100.0);
     m_rorRadiusSpin->setValue(2.0);
@@ -78,22 +78,22 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     hROR1->addWidget(m_rorRadiusSpin);
     lROR->addLayout(hROR1);
     QHBoxLayout* hROR2 = new QHBoxLayout();
-    hROR2->addWidget(new QLabel("Min Nokta:", this));
+    hROR2->addWidget(new QLabel("Min Points:", this));
     m_rorMinPtsSpin = new QSpinBox(this);
     m_rorMinPtsSpin->setRange(1, 200);
     m_rorMinPtsSpin->setValue(10);
     hROR2->addWidget(m_rorMinPtsSpin);
     lROR->addLayout(hROR2);
-    QPushButton* btnROR = new QPushButton("Gürültüyü Temizle (ROR)", this);
+    QPushButton* btnROR = new QPushButton("Remove Noise (ROR)", this);
     lROR->addWidget(btnROR);
     mainLayout->addWidget(gbROR);
 
     // Auto Filters (Cylindrical)
-    QGroupBox* gbAuto = new QGroupBox("Otomatik Filtreler (Silindir)", this);
+    QGroupBox* gbAuto = new QGroupBox("Automatic Filters (Cylinder)", this);
     QVBoxLayout* lAuto = new QVBoxLayout(gbAuto);
 
     QHBoxLayout* hRad = new QHBoxLayout();
-    hRad->addWidget(new QLabel("Yariçap (mm):", this));
+    hRad->addWidget(new QLabel("Radius (mm):", this));
     m_radiusSpin = new QDoubleSpinBox(this);
     m_radiusSpin->setRange(1.0, 500.0);
     m_radiusSpin->setValue(100.0);
@@ -112,54 +112,54 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     hZ->addWidget(m_maxZSpin);
     lAuto->addLayout(hZ);
 
-    QPushButton* m_btnAutoFilter = new QPushButton("Silindir Disini Sil", this);
+    QPushButton* m_btnAutoFilter = new QPushButton("Remove Outside Cylinder", this);
     lAuto->addWidget(m_btnAutoFilter);
     mainLayout->addWidget(gbAuto);
 
     // Manual Filters
-    QGroupBox* gbManual = new QGroupBox("Manuel Seçim (MeshLab Tarzi)", this);
+    QGroupBox* gbManual = new QGroupBox("Manual Selection (MeshLab Style)", this);
     QVBoxLayout* lManual = new QVBoxLayout(gbManual);
-    
-    m_chkManualSelect = new QCheckBox("Ekranda Fareyle Secim Yap", this);
+
+    m_chkManualSelect = new QCheckBox("Select with Mouse on Screen", this);
     lManual->addWidget(m_chkManualSelect);
 
-    m_btnDeleteSelected = new QPushButton("Secili Noktalari Sil", this);
+    m_btnDeleteSelected = new QPushButton("Delete Selected Points", this);
     m_btnDeleteSelected->setEnabled(false);
     lManual->addWidget(m_btnDeleteSelected);
     mainLayout->addWidget(gbManual);
 
     // Mesh Generation
-    QGroupBox* gbMesh = new QGroupBox("Yuzey Olusturma (Mesh)", this);
+    QGroupBox* gbMesh = new QGroupBox("Surface Generation (Mesh)", this);
     QVBoxLayout* lMesh = new QVBoxLayout(gbMesh);
 
-    m_btnGenerateMesh = new QPushButton("Hizli Yuzey (Mesh) Olustur", this);
+    m_btnGenerateMesh = new QPushButton("Generate Quick Surface (Mesh)", this);
     lMesh->addWidget(m_btnGenerateMesh);
 
-    m_btnSaveMesh = new QPushButton("Yuzeyi Kaydet (.obj)", this);
+    m_btnSaveMesh = new QPushButton("Save Surface (.obj)", this);
     lMesh->addWidget(m_btnSaveMesh);
 
-    m_btnClearMesh = new QPushButton("Yuzeyi Temizle", this);
+    m_btnClearMesh = new QPushButton("Clear Surface", this);
     lMesh->addWidget(m_btnClearMesh);
 
     lMesh->addWidget(makeSep(this));
 
-    m_btnLoadPLY = new QPushButton("PLY Yukle", this);
+    m_btnLoadPLY = new QPushButton("Load PLY", this);
     lMesh->addWidget(m_btnLoadPLY);
 
-    m_btnExportPLY = new QPushButton("Aktif (Filtreli) Noktalari Kaydet (.ply)", this);
+    m_btnExportPLY = new QPushButton("Save Active (Filtered) Points (.ply)", this);
     lMesh->addWidget(m_btnExportPLY);
     
     mainLayout->addWidget(gbMesh);
 
     // History Control
-    QGroupBox* gbHistory = new QGroupBox("Gecmis", this);
+    QGroupBox* gbHistory = new QGroupBox("History", this);
     QVBoxLayout* lHistory = new QVBoxLayout(gbHistory);
 
-    m_btnUndo = new QPushButton("Geri Al (Undo)", this);
+    m_btnUndo = new QPushButton("Undo", this);
     m_btnUndo->setEnabled(false);
     lHistory->addWidget(m_btnUndo);
 
-    m_btnReset = new QPushButton("Orijinale Don", this);
+    m_btnReset = new QPushButton("Revert to Original", this);
     m_btnReset->setEnabled(false);
     lHistory->addWidget(m_btnReset);
     mainLayout->addWidget(gbHistory);
@@ -253,28 +253,28 @@ void ProcessPanel::onClearMesh()
 
 void ProcessPanel::onSaveMesh()
 {
-    QString fileName = QFileDialog::getSaveFileName(this, "Mesh Kaydet", "", "OBJ Dosyalari (*.obj)");
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Mesh", "", "OBJ Files (*.obj)");
     if (fileName.isEmpty()) return;
 
     if (m_viz->saveMeshToOBJ(fileName)) {
-        QMessageBox::information(this, "Basarili", "Mesh basariyla kaydedildi.");
+        QMessageBox::information(this, "Success", "Mesh saved successfully.");
     } else {
-        QMessageBox::critical(this, "Hata", "Mesh kaydedilemedi! Lutfen once mesh olusturun.");
+        QMessageBox::critical(this, "Error", "Could not save mesh! Please generate a mesh first.");
     }
 }
 
 
 void ProcessPanel::onLoadPLY()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, "PLY Yukle", "", "PLY Dosyalari (*.ply)");
+    QString fileName = QFileDialog::getOpenFileName(this, "Load PLY", "", "PLY Files (*.ply)");
     if (fileName.isEmpty()) return;
 
     QVector<QVector3D> points;
     if (io::readPLY(fileName, points)) {
         m_controller->addNewLayer(points, QFileInfo(fileName).baseName());
-        QMessageBox::information(this, "Basarili", QString("%1 nokta yuklendi.").arg(points.size()));
+        QMessageBox::information(this, "Success", QString("%1 points loaded.").arg(points.size()));
     } else {
-        QMessageBox::critical(this, "Hata", "PLY dosyasi okunamadi!");
+        QMessageBox::critical(this, "Error", "Could not read PLY file!");
     }
 }
 
@@ -282,21 +282,21 @@ void ProcessPanel::onExportPLY()
 {
     const QVector<QVector3D>& points = m_viz->getPoints();
     if (points.isEmpty()) {
-        QMessageBox::warning(this, "Uyari", "Disa aktarilacak nokta yok!");
+        QMessageBox::warning(this, "Warning", "No points to export!");
         return;
     }
 
-    QString fileName = QFileDialog::getSaveFileName(this, "Filtreli PLY Kaydet", "", "PLY Dosyalari (*.ply)");
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Filtered PLY", "", "PLY Files (*.ply)");
     if (fileName.isEmpty()) return;
 
     // Normalli kaydet: MeshLab'da dogrudan Poisson mesh kurmayi saglar
     const QVector<QVector3D> normals = core::PointCloudProcessor::computeNormals(points);
     if (io::writePLYWithNormals(fileName, points, normals)) {
-        QMessageBox::information(this, "Basarili",
-            QString("%1 nokta basariyla kaydedildi (%2).")
+        QMessageBox::information(this, "Success",
+            QString("%1 points saved successfully (%2).")
                 .arg(points.size())
-                .arg(normals.isEmpty() ? "normalsiz" : "normalli"));
+                .arg(normals.isEmpty() ? "without normals" : "with normals"));
     } else {
-        QMessageBox::critical(this, "Hata", "Dosya kaydedilirken hata olustu!");
+        QMessageBox::critical(this, "Error", "An error occurred while saving the file!");
     }
 }

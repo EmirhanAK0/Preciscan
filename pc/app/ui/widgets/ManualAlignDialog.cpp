@@ -12,13 +12,13 @@
 ManualAlignDialog::ManualAlignDialog(ScanController* ctrl, QWidget* parent)
     : QDialog(parent), m_ctrl(ctrl)
 {
-    setWindowTitle("Manuel Kaba Hizalama (Pre-Align)");
+    setWindowTitle("Manual Coarse Alignment (Pre-Align)");
     setMinimumWidth(300);
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
-    QLabel* infoLabel = new QLabel("Seçili katmanı (Layer) kaba hizalamak için aşağıdaki değerleri değiştirin.\n"
-                                   "3D ekranda canlı olarak hareket edecektir.");
+    QLabel* infoLabel = new QLabel("Change the values below to coarsely align the selected layer.\n"
+                                   "It will move live in the 3D view.");
     infoLabel->setWordWrap(true);
     mainLayout->addWidget(infoLabel);
 
@@ -33,32 +33,32 @@ ManualAlignDialog::ManualAlignDialog(ScanController* ctrl, QWidget* parent)
     };
 
     // Kaydırma (Translation)
-    QGroupBox* gbTrans = new QGroupBox("Kaydırma (mm)", this);
+    QGroupBox* gbTrans = new QGroupBox("Translation (mm)", this);
     QFormLayout* lTrans = new QFormLayout(gbTrans);
     m_spnTx = createSpinBox(-500.0, 500.0, 5.0);
     m_spnTy = createSpinBox(-500.0, 500.0, 5.0);
     m_spnTz = createSpinBox(-500.0, 500.0, 5.0);
-    lTrans->addRow("X Kaydırma:", m_spnTx);
-    lTrans->addRow("Y Kaydırma:", m_spnTy);
-    lTrans->addRow("Z Kaydırma:", m_spnTz);
+    lTrans->addRow("X Translation:", m_spnTx);
+    lTrans->addRow("Y Translation:", m_spnTy);
+    lTrans->addRow("Z Translation:", m_spnTz);
     mainLayout->addWidget(gbTrans);
 
     // Döndürme (Rotation)
-    QGroupBox* gbRot = new QGroupBox("Döndürme (Derece)", this);
+    QGroupBox* gbRot = new QGroupBox("Rotation (Degrees)", this);
     QFormLayout* lRot = new QFormLayout(gbRot);
     m_spnRx = createSpinBox(-360.0, 360.0, 5.0);
     m_spnRy = createSpinBox(-360.0, 360.0, 5.0);
     m_spnRz = createSpinBox(-360.0, 360.0, 5.0);
-    lRot->addRow("X Ekseni (Rx):", m_spnRx);
-    lRot->addRow("Y Ekseni (Ry):", m_spnRy);
-    lRot->addRow("Z Ekseni (Rz):", m_spnRz);
+    lRot->addRow("X Axis (Rx):", m_spnRx);
+    lRot->addRow("Y Axis (Ry):", m_spnRy);
+    lRot->addRow("Z Axis (Rz):", m_spnRz);
     mainLayout->addWidget(gbRot);
 
     // Butonlar
     QHBoxLayout* btnLayout = new QHBoxLayout;
-    QPushButton* btnReset = new QPushButton("Sıfırla", this);
-    QPushButton* btnCancel = new QPushButton("İptal", this);
-    QPushButton* btnApply = new QPushButton("Uygula", this);
+    QPushButton* btnReset = new QPushButton("Reset", this);
+    QPushButton* btnCancel = new QPushButton("Cancel", this);
+    QPushButton* btnApply = new QPushButton("Apply", this);
     btnApply->setDefault(true);
 
     btnLayout->addWidget(btnReset);

@@ -54,7 +54,7 @@ ConnectingOverlay::ConnectingOverlay(QWidget* parent) : QWidget(parent, Qt::Widg
             [this]
             {
                 if (m_phase == Phase::Connecting)
-                    showError("Zaman asimi — baglanti yanit vermedi");
+                    showError("Timeout — no response from connection");
             });
 
     hide();
@@ -66,7 +66,7 @@ void ConnectingOverlay::showConnecting()
     m_phase     = Phase::Connecting;
     m_spinning  = true;
     m_spinAngle = 0;
-    m_textLabel->setText("Lazere baglaniyor...");
+    m_textLabel->setText("Connecting to laser...");
     m_iconLabel->setText(""); // boş — spinner paintEvent'te cizilecek
     reposition();
     show();
@@ -83,7 +83,7 @@ void ConnectingOverlay::showSuccess()
     m_phase = Phase::Success;
     m_iconLabel->setText("✓");
     m_iconLabel->setStyleSheet("font-size: 28px; color: #2ecc71;");
-    m_textLabel->setText("Baglanti basarili!");
+    m_textLabel->setText("Connected successfully!");
     m_textLabel->setStyleSheet("color: #2ecc71; font-size: 13px; font-weight: bold;");
     repaint();
     m_closeTimer->start(1200);
@@ -96,7 +96,7 @@ void ConnectingOverlay::showError(const QString& msg)
     m_phase = Phase::Error;
     m_iconLabel->setText("✗");
     m_iconLabel->setStyleSheet("font-size: 28px; color: #e74c3c;");
-    m_textLabel->setText(msg.isEmpty() ? "Baglanti basarisiz!" : msg);
+    m_textLabel->setText(msg.isEmpty() ? "Connection failed!" : msg);
     m_textLabel->setStyleSheet("color: #e74c3c; font-size: 12px; font-weight: bold;");
     repaint();
     m_closeTimer->start(2500);

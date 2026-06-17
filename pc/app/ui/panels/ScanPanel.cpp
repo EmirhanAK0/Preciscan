@@ -49,13 +49,13 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     root->setSpacing(4);
 
     // -- Ayarlar ------------------------------------------------
-    root->addWidget(sectionLabel("AYARLAR", this));
+    root->addWidget(sectionLabel("SETTINGS", this));
 
     auto* grid = new QGridLayout;
     grid->setHorizontalSpacing(8);
     grid->setVerticalSpacing(4);
 
-    auto* speedLabel = new QLabel("Tur Süresi (sn):", this);
+    auto* speedLabel = new QLabel("Revolution Time (s):", this);
     speedLabel->setStyleSheet("color: #aaa; font-size: 10px;");
     m_speedSlider = new QSlider(Qt::Horizontal, this);
     m_speedSlider->setRange(10, 250);
@@ -76,7 +76,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
                     m_ctrl->setSecPerRev(static_cast<float>(val));
             });
 
-    auto* expLabel = new QLabel("Poz. (us):", this);
+    auto* expLabel = new QLabel("Exposure (us):", this);
     expLabel->setStyleSheet("color: #aaa; font-size: 10px;");
     m_exposureSlider = new QSlider(Qt::Horizontal, this);
     m_exposureSlider->setRange(50, 5000);
@@ -87,7 +87,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     m_exposureSpin->setFixedWidth(55);
     m_exposureSpin->setStyleSheet(
         "background:#1a1a1a; color:#ccc; border:1px solid #333; border-radius:3px;");
-    m_autoShutterCheck = new QCheckBox("Otomatik", this);
+    m_autoShutterCheck = new QCheckBox("Auto", this);
     m_autoShutterCheck->setStyleSheet("color: #aaa; font-size: 10px;");
     
     // Değerleri Control'den al
@@ -126,19 +126,19 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     // -- Kontrol ------------------------------------------------
     root->addWidget(makeSep(this));
-    root->addWidget(sectionLabel("KONTROL", this));
+    root->addWidget(sectionLabel("CONTROL", this));
 
-    m_scanStatusLabel = new QLabel("Beklemede", this);
+    m_scanStatusLabel = new QLabel("Idle", this);
     m_scanStatusLabel->setAlignment(Qt::AlignCenter);
     m_scanStatusLabel->setStyleSheet(
         "color:#777; font-size:10px; padding:2px; background:#111; border-radius:3px;");
     root->addWidget(m_scanStatusLabel);
 
     m_scanDirCombo = new QComboBox(this);
-    m_scanDirCombo->addItem("İleri (CW)");
-    m_scanDirCombo->addItem("Geri (CCW)");
-    
-    m_startBtn   = new QPushButton("TARAMAYI BASLAT", this);
+    m_scanDirCombo->addItem("Forward (CW)");
+    m_scanDirCombo->addItem("Reverse (CCW)");
+
+    m_startBtn   = new QPushButton("START SCAN", this);
     m_startBtn->setEnabled(false);
     m_startBtn->setStyleSheet(
         "QPushButton{background:#1a3a1a;color:#3a3;font-weight:bold;border:1px solid "
@@ -146,7 +146,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         "QPushButton:hover:enabled{background:#2ecc71;color:#000;} "
         "QPushButton:disabled{background:#1a1a1a;color:#444;border-color:#333;}");
 
-    m_stopBtn = new QPushButton("DURDUR", this);
+    m_stopBtn = new QPushButton("STOP", this);
     m_stopBtn->setEnabled(false);
     m_stopBtn->setFixedWidth(90);
     m_stopBtn->setStyleSheet(
@@ -164,7 +164,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     // -- Katmanlar -----------------------------------------------
     root->addWidget(makeSep(this));
-    root->addWidget(sectionLabel("KATMANLAR", this));
+    root->addWidget(sectionLabel("LAYERS", this));
 
     m_layerList = new QListWidget(this);
     m_layerList->setMaximumHeight(150);
@@ -177,32 +177,32 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     auto* mergeRow = new QHBoxLayout;
     m_mergeMode    = new QComboBox(this);
     m_mergeMode->addItems({
-        "Birlestir (Z-Offset)",
-        "ICP ile Birlestir (Duz)",
-        "ICP ile Birlestir (Ters / Bas Asagi)",
-        "ICP ile Birlestir (Yan / X+90)",
-        "ICP ile Birlestir (Yan / X-90)",
-        "ICP (Mevcut Konumdan / Manuel Sonrasi)"
+        "Merge (Z-Offset)",
+        "Merge with ICP (Flat)",
+        "Merge with ICP (Inverted / Upside Down)",
+        "Merge with ICP (Side / X+90)",
+        "Merge with ICP (Side / X-90)",
+        "ICP (From Current Pose / After Manual)"
     });
     m_mergeMode->setToolTip(
-        "Mevcut Konumdan: Katmani manuel hizaladiysaniz bunu secin —\n"
-        "preset rotasyon ve otomatik yaw aramasi uygulanmaz, mevcut\n"
-        "pozdan dogrudan GICP ince hizalama yapilir. Simetrik objelerde\n"
-        "(yazi/detay hizasi onemliyse) en guvenilir yontemdir.");
+        "From Current Pose: Select this if you manually aligned the layer —\n"
+        "no preset rotation or automatic yaw search is applied; fine GICP\n"
+        "alignment runs directly from the current pose. It is the most\n"
+        "reliable method for symmetric objects (when text/detail matters).");
     m_mergeMode->setStyleSheet("background:#1a1a1a;color:#ccc;border:1px solid "
                                "#333;border-radius:3px;padding:2px;font-size:10px;");
-    m_mergeBtn = new QPushButton("Birlestir", this);
+    m_mergeBtn = new QPushButton("Merge", this);
     m_mergeBtn->setFixedWidth(80);
     m_mergeBtn->setStyleSheet("QPushButton{background:#1a2a3a;color:#5af;border:1px solid "
                               "#25f;border-radius:3px;padding:4px;font-size:10px;} "
                               "QPushButton:hover{background:#1e3a5a;}");
-    m_addLayerBtn = new QPushButton("STL Sec", this);
+    m_addLayerBtn = new QPushButton("Load STL", this);
     m_addLayerBtn->setFixedWidth(65);
     m_addLayerBtn->setStyleSheet(
         "QPushButton{background:#222;color:#777;border:1px solid "
         "#333;border-radius:3px;padding:4px;font-size:9px;} QPushButton:hover{color:#aaa;}");
 
-    m_exportPlyBtn = new QPushButton("PLY Disa Aktar", this);
+    m_exportPlyBtn = new QPushButton("Export PLY", this);
     m_exportPlyBtn->setFixedWidth(85);
     m_exportPlyBtn->setStyleSheet(
         "QPushButton{background:#1e3a24;color:#6fa;border:1px solid "
@@ -217,7 +217,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     // -- Z-Ekseni Kontrol ----------------------------------------
     root->addWidget(makeSep(this));
-    root->addWidget(sectionLabel("Z-EKSENI KONTROL", this));
+    root->addWidget(sectionLabel("Z-AXIS CONTROL", this));
 
     auto* zRow = new QHBoxLayout;
     zRow->setSpacing(4);
@@ -235,7 +235,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         "QDoubleSpinBox{background:#1a1a1a;color:#5af;border:1px solid #333;"
         "border-radius:3px;padding:3px;font-size:10px;}");
 
-    m_zMoveBtn = new QPushButton("Hareket", this);
+    m_zMoveBtn = new QPushButton("Move", this);
     m_zMoveBtn->setStyleSheet(
         "QPushButton{background:#1a2a3a;color:#5af;border:1px solid "
         "#25f;border-radius:3px;padding:4px;font-size:10px;font-weight:bold;} "
@@ -245,7 +245,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
                 if (m_ctrl) {
                     float mm = static_cast<float>(m_zMoveSpin->value());
                     m_ctrl->sendZMove(mm);
-                    appendLog("SYS", QString("Z ekseni %1 mm hareket komutu gonderildi").arg(mm, 0, 'f', 1));
+                    appendLog("SYS", QString("Z-axis move command sent: %1 mm").arg(mm, 0, 'f', 1));
                 }
             });
 
@@ -258,7 +258,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             [this]() {
                 if (m_ctrl) {
                     m_ctrl->sendZHome();
-                    appendLog("SYS", "Z homing komutu gonderildi");
+                    appendLog("SYS", "Z homing command sent");
                 }
             });
 
@@ -271,7 +271,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             [this]() {
                 if (m_ctrl) {
                     m_ctrl->sendLinHome();
-                    appendLog("SYS", "Lineer homing komutu gonderildi");
+                    appendLog("SYS", "Linear homing command sent");
                 }
             });
 
@@ -300,7 +300,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             [this]()
             {
                 QString path =
-                    QFileDialog::getOpenFileName(this, "STL Dosyasi Sec", "", "STL Files (*.stl)");
+                    QFileDialog::getOpenFileName(this, "Select STL File", "", "STL Files (*.stl)");
                 if (!path.isEmpty() && m_ctrl)
                 {
                     m_ctrl->connectLaserSim(path);
@@ -318,7 +318,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         }
 
         if (selectedIds.isEmpty()) {
-            QMessageBox::warning(this, "Uyari", "Disa aktarmak icin en az bir katman secmelisiniz.");
+            QMessageBox::warning(this, "Warning", "You must select at least one layer to export.");
             return;
         }
 
@@ -336,12 +336,12 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         }
 
         if (merged.isEmpty()) {
-            QMessageBox::warning(this, "Uyari", "Secilen katmanlarda nokta bulunamadi.");
+            QMessageBox::warning(this, "Warning", "No points found in the selected layers.");
             return;
         }
 
         const QString path = QFileDialog::getSaveFileName(
-            this, "PLY Olarak Disa Aktar", "", "PLY Dosyasi (*.ply)");
+            this, "Export as PLY", "", "PLY File (*.ply)");
 
         if (path.isEmpty()) return;
 
@@ -349,14 +349,14 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         // Poisson mesh kurulabilir, normal hesaplama adimi gerekmez.
         const QVector<QVector3D> normals = core::PointCloudProcessor::computeNormals(merged);
         if (io::writePLYWithNormals(path, merged, normals)) {
-            QMessageBox::information(this, "Basarili",
-                QString("%1 nokta basariyla kaydedildi (%2).")
+            QMessageBox::information(this, "Success",
+                QString("%1 points saved successfully (%2).")
                     .arg(merged.size())
-                    .arg(normals.isEmpty() ? "normalsiz" : "normalli"));
-            appendLog("SYS", QString("PLY disa aktarildi: %1 (%2 nokta)").arg(path).arg(merged.size()));
+                    .arg(normals.isEmpty() ? "without normals" : "with normals"));
+            appendLog("SYS", QString("PLY exported: %1 (%2 points)").arg(path).arg(merged.size()));
         } else {
-            QMessageBox::critical(this, "Hata", "Dosya kaydedilirken bir hata olustu.");
-            appendLog("ERR", "PLY disa aktarma basarisiz.");
+            QMessageBox::critical(this, "Error", "An error occurred while saving the file.");
+            appendLog("ERR", "PLY export failed.");
         }
     });
 
@@ -372,7 +372,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         connect(m_ctrl, &ScanController::activeLayerChanged, this, &ScanPanel::rebuildLayerListUI);
     }
 
-    appendLog("SYS", "ScanPanel hazir.");
+    appendLog("SYS", "ScanPanel ready.");
     
     // Baslangicta katmanlari ciz
     rebuildLayerListUI();
@@ -455,7 +455,7 @@ void ScanPanel::onMergeClicked()
     }
 
     if (selectedIds.size() < 2) {
-        QMessageBox::warning(this, "Hata", "Birlestirme icin en az 2 katman secilmeli.");
+        QMessageBox::warning(this, "Error", "At least 2 layers must be selected to merge.");
         return;
     }
 
@@ -486,7 +486,7 @@ void ScanPanel::onScanStarted()
     m_scanDirCombo->setEnabled(false);
     m_startBtn->setEnabled(false);
     m_stopBtn->setEnabled(true);
-    m_scanStatusLabel->setText("TARAMA AKTIF");
+    m_scanStatusLabel->setText("SCANNING");
     m_scanStatusLabel->setStyleSheet("color:#2ecc71;font-weight:bold;font-size:10px;padding:2px;"
                                      "background:#0d1f15;border-radius:3px;");
 }
@@ -496,7 +496,7 @@ void ScanPanel::onScanStopped()
     m_scanDirCombo->setEnabled(true);
     m_startBtn->setEnabled(m_mcuReady || m_laserReady);
     m_stopBtn->setEnabled(false);
-    m_scanStatusLabel->setText("Durduruldu");
+    m_scanStatusLabel->setText("Stopped");
     m_scanStatusLabel->setStyleSheet(
         "color:#aaa;font-size:10px;padding:2px;background:#111;border-radius:3px;");
 }
@@ -504,7 +504,7 @@ void ScanPanel::onScanStopped()
 void ScanPanel::onMcuConnected(bool ok)
 {
     m_mcuReady = ok;
-    appendLog(ok ? "OK" : "ERR", ok ? "MCU baglandi." : "MCU baglanamadi!");
+    appendLog(ok ? "OK" : "ERR", ok ? "MCU connected." : "MCU connection failed!");
     updateStartButtonState();
 }
 

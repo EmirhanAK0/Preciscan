@@ -16,9 +16,9 @@ VisualizerWidget::VisualizerWidget(QWidget* parent) : QOpenGLWidget(parent)
     setStyleSheet("background: #050505; border: 1px solid #1a1a1a;");
 
     // Add Preset View Buttons
-    m_btnTop = new QPushButton("Üst", this);
-    m_btnFront = new QPushButton("Ön", this);
-    m_btnLeft = new QPushButton("Yan", this);
+    m_btnTop = new QPushButton("Top", this);
+    m_btnFront = new QPushButton("Front", this);
+    m_btnLeft = new QPushButton("Side", this);
 
     QString btnStyle = "QPushButton { background: rgba(30, 30, 30, 180); color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 4px 8px; } QPushButton:hover { background: rgba(60, 60, 60, 200); color: white; }";
     m_btnTop->setStyleSheet(btnStyle);

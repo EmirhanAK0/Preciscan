@@ -29,7 +29,7 @@ ScanController::ScanController(McuListener* mcu,
 
     connect(m_calibrator, &AutoCalibrator::calibrationFinished, this, [this](bool success, QMatrix4x4 mat, QString msg) {
         emit processingFinished();
-        emit logMessage(success ? "OK" : "ERR", "3D Kalibrasyon: " + msg);
+        emit logMessage(success ? "OK" : "ERR", "3D Calibration: " + msg);
         
         if (success) {
             reapplyCurrentCalibration();
@@ -53,10 +53,10 @@ ScanController::ScanController(McuListener* mcu,
             return;
         m_laserConnectTimedOut = true;
         emit logMessage("WARN",
-            "Lazer baglanti yaniti 12 sn icinde gelmedi. Cihaz IP'si ile PC Ethernet "
-            "adaptorunuz ayni alt agda mi? (Arka plan denemesi suruyor.)");
+            "No laser connection response within 12 s. Are the device IP and your PC Ethernet "
+            "adapter on the same subnet? (Background attempt still running.)");
         emit laserConnectFailed(
-            "Zaman asimi — cihaz yanit vermedi.\nPC adaptoru ile lazer ayni alt agda mi?");
+            "Timeout — device did not respond.\nAre the PC adapter and the laser on the same subnet?");
     });
 }
 
@@ -105,11 +105,11 @@ void ScanController::connectMcuSerial()
     if (m_serialReader->start()) {
         m_mcuConnected = true;
         emit mcuConnectionChanged(true);
-        emit logMessage("OK", QString("MCU (Serial) baglandi: %1").arg(m_serialPort));
+        emit logMessage("OK", QString("MCU (Serial) connected: %1").arg(m_serialPort));
     } else {
         m_mcuConnected = false;
         emit mcuConnectionChanged(false);
-        emit logMessage("ERR", QString("MCU (Serial) baglanamadi: %1").arg(m_serialPort));
+        emit logMessage("ERR", QString("MCU (Serial) connection failed: %1").arg(m_serialPort));
         delete m_serialReader;
         m_serialReader = nullptr;
     }
@@ -124,14 +124,14 @@ void ScanController::disconnectMcuSerial()
     }
     m_mcuConnected = false;
     emit mcuConnectionChanged(false);
-    emit logMessage("SYS", "MCU (Serial) baglantisi kesildi.");
+    emit logMessage("SYS", "MCU (Serial) disconnected.");
 }
 
 bool ScanController::validateLaserTiming(QString* errorMsg) const
 {
     if (m_laserProfileRate <= 0) {
         if (errorMsg)
-            *errorMsg = "Profil hizi sifirdan buyuk olmalidir.";
+            *errorMsg = "Profile rate must be greater than zero.";
         return false;
     }
 
@@ -139,7 +139,7 @@ bool ScanController::validateLaserTiming(QString* errorMsg) const
     if (m_laserShutterUs >= periodUs) {
         if (errorMsg) {
             *errorMsg =
-                QString("Pozlama suresi (%1 us), secilen profil hizinin periyodundan (%2 us) kucuk olmalidir.")
+                QString("Exposure time (%1 us) must be smaller than the selected profile rate period (%2 us).")
                     .arg(m_laserShutterUs)
                     .arg(periodUs);
         }
@@ -153,13 +153,13 @@ void ScanController::connectLaser()
 {
     // Zaten bir baglanti denemesi sürüyorsa tekrar baslatma (cift tiklamaya karsi).
     if (m_laserConnecting) {
-        emit logMessage("SYS", "Lazer baglanti denemesi zaten devam ediyor, lutfen bekleyin.");
+        emit logMessage("SYS", "A laser connection attempt is already in progress, please wait.");
         return;
     }
 
     if (!m_laser) {
-        emit logMessage("ERR", "LaserManager mevcut degil!");
-        emit laserConnectFailed("LaserManager mevcut degil!");
+        emit logMessage("ERR", "LaserManager is not available!");
+        emit laserConnectFailed("LaserManager is not available!");
         return;
     }
 
@@ -172,7 +172,7 @@ void ScanController::connectLaser()
 
     // init() = DLL yukleme: hizli, UI thread'inde kalabilir.
     if (!m_laser->init()) {
-        const QString msg = "Lazer SDK yuklenemedi (LLT.dll)! Lazer bagli mi?";
+        const QString msg = "Laser SDK could not be loaded (LLT.dll)! Is the laser connected?";
         emit logMessage("ERR", msg);
         emit laserConnectFailed(msg);
         return;
@@ -188,10 +188,10 @@ void ScanController::connectLaser()
     // Tetikleme modunu aktar
     if (m_triggerMode == ScanTriggerMode::TimeBased) {
         m_laser->setTriggerMode(LaserManager::TriggerMode::Internal);
-        emit logMessage("SYS", "Lazer tetik: Internal (surekli profil akisi)");
+        emit logMessage("SYS", "Laser trigger: Internal (continuous profile stream)");
     } else {
         m_laser->setTriggerMode(LaserManager::TriggerMode::ExternalDigitalIn);
-        emit logMessage("SYS", "Lazer tetik: External/Encoder (donanimsal tetik bekleniyor)");
+        emit logMessage("SYS", "Laser trigger: External/Encoder (waiting for hardware trigger)");
     }
 
     // ── Yavas kisim (cihaz kesfi + ag handshake + ayarlar) worker thread'de ──
@@ -200,7 +200,7 @@ void ScanController::connectLaser()
     m_laserConnecting = true;
     m_laserConnectTimedOut = false;
     emit laserConnectStarted();
-    emit logMessage("SYS", "Lazere baglaniliyor... (arka planda)");
+    emit logMessage("SYS", "Connecting to laser... (in background)");
     m_laserConnectTimeout->start();
 
     disconnect(&m_laserConnectWatcher, &QFutureWatcher<LaserConnectResult>::finished, this, nullptr);
@@ -233,7 +233,7 @@ void ScanController::onLaserConnectFinished()
     if (timedOut) {
         if (!r.ok) {
             const QString detail = r.error.isEmpty() ? QString("zaman asimi") : r.error;
-            emit logMessage("ERR", QString("Lazer baglanti denemesi sonuclandi: %1").arg(detail));
+            emit logMessage("ERR", QString("Laser connection attempt finished: %1").arg(detail));
             return;
         }
         // Gec gelen basari: cihaz aslinda baglandi. Tutarlilik icin kabul et.
@@ -242,14 +242,14 @@ void ScanController::onLaserConnectFinished()
         m_laserConnected = true;
         emit isSimModeChanged(false);
         emit laserConnectionChanged(true);
-        emit logMessage("OK", "Lazer baglandi (gec yanit).");
+        emit logMessage("OK", "Laser connected (late response).");
         return;
     }
 
     if (!r.ok) {
-        const QString detail = r.error.isEmpty() ? QString("bilinmeyen hata") : r.error;
-        emit logMessage("ERR", QString("Lazere baglanilamadi! Detay: %1").arg(detail));
-        emit laserConnectFailed(QString("Baglanilamadi:\n%1").arg(detail));
+        const QString detail = r.error.isEmpty() ? QString("unknown error") : r.error;
+        emit logMessage("ERR", QString("Could not connect to laser! Detail: %1").arg(detail));
+        emit laserConnectFailed(QString("Could not connect:\n%1").arg(detail));
         return;
     }
 
@@ -266,7 +266,7 @@ void ScanController::onLaserConnectFinished()
 
     emit logMessage(
         "OK",
-        QString("Lazer baglandi. rate=%1 Hz, shutter=%2 us, auto=%3, field=%4, points=%5")
+        QString("Laser connected. rate=%1 Hz, shutter=%2 us, auto=%3, field=%4, points=%5")
             .arg(m_laserProfileRate)
             .arg(m_laserShutterUs)
             .arg(m_laserAutoShutter ? "on" : "off")
@@ -286,7 +286,7 @@ void ScanController::connectLaserSim(const QString& stlPath)
 #endif
 
     if (mesh.triangles.empty()) {
-        emit logMessage("ERR", "STL yuklenemedi veya bos!");
+        emit logMessage("ERR", "STL could not be loaded or is empty!");
         return;
     }
 
@@ -352,7 +352,7 @@ void ScanController::disconnectLaser()
     // erisim CInterfaceLLT'yi bozar. Buton UI'da kilitli oldugu icin normalde
     // buraya girilmez; yine de guvenlik amacli kontrol ediyoruz.
     if (m_laserConnecting) {
-        emit logMessage("SYS", "Baglanti denemesi suruyor; once tamamlanmasi bekleniyor.");
+        emit logMessage("SYS", "A connection attempt is in progress; waiting for it to finish first.");
         return;
     }
 
@@ -363,7 +363,7 @@ void ScanController::disconnectLaser()
 
     m_laserConnected = false;
     emit laserConnectionChanged(false);
-    emit logMessage("SYS", "Lazer baglantisi kesildi.");
+    emit logMessage("SYS", "Laser disconnected.");
 }
 
 // =====================================================================
@@ -396,7 +396,7 @@ void ScanController::startScan(int direction)
         while (m_mcu->tryGetTriggerEvent(uEvt)) {}
     }
 
-    emit logMessage("SYS", "Tetik kuyruklari ve ring buffer temizlendi.");
+    emit logMessage("SYS", "Trigger queues and ring buffer cleared.");
     emit requestClearVisualizer();
 
     m_scanning = true;
@@ -431,23 +431,23 @@ void ScanController::startScan(int direction)
             m_serialReader->sendCommand(QString("TRIG_SRC:%1").arg(srcVal).toStdString());
             m_serialReader->sendCommand(QString("SPEED:%1").arg(speed_us).toStdString());
             m_serialReader->sendCommand(QString("RES:%1").arg(activeRes, 0, 'f', 2).toStdString());
-            emit logMessage("SYS", QString("Motor ayarlari gonderildi: Tur=%1 sn (Adim: %2 us), Cozunurluk=%3, Kaynak=%4")
+            emit logMessage("SYS", QString("Motor settings sent: Revolution=%1 s (Step: %2 us), Resolution=%3, Source=%4")
                                        .arg(m_secPerRev).arg(speed_us).arg(activeRes)
                                        .arg(srcVal == 0 ? "AS5600" : "Step"));
 
             QString cmd = (direction == 0) ? "START_CW" : "START_CCW";
             m_serialReader->sendCommand(cmd.toStdString());
-            emit logMessage("SYS", "Arduino'ya " + cmd + " komutu gonderildi.");
+            emit logMessage("SYS", "To Arduino: " + cmd + " command sent.");
         }
 
         m_hwTimer->start();
 
         if (m_triggerMode == ScanTriggerMode::TimeBased)
-            emit logMessage("SYS", "Tarama basladi: Time-Based mod");
+            emit logMessage("SYS", "Scan started: Time-Based mode");
         else if (m_triggerMode == ScanTriggerMode::Encoder)
-            emit logMessage("SYS", "Tarama basladi: Encoder Trigger mod — MCU tetik bekleniyor");
+            emit logMessage("SYS", "Scan started: Encoder Trigger mode — waiting for MCU trigger");
         else
-            emit logMessage("SYS", "Tarama basladi: External Trigger mod — harici sinyal bekleniyor");
+            emit logMessage("SYS", "Scan started: External Trigger mode — waiting for external signal");
     }
 
     emit scanStarted();
@@ -494,25 +494,25 @@ void ScanController::stopScan()
     if (m_triggerMode != ScanTriggerMode::TimeBased &&
         (m_statAngles > 0 || m_statProfiles > 0)) {
         emit logMessage("SYS",
-            QString("Tarama istatistikleri: aci=%1, profil=%2 (bos=%3), "
-                    "eslesen=%4, seq kaybi=%5, tasma=%6, kuyrukta kalan: aci=%7 profil=%8")
+            QString("Scan statistics: angle=%1, profiles=%2 (empty=%3), "
+                    "matched=%4, seq loss=%5, overflow=%6, remaining in queue: angle=%7 profiles=%8")
                 .arg(m_statAngles).arg(m_statProfiles).arg(m_statEmptyProfiles)
                 .arg(m_statPaired).arg(m_statSeqGaps).arg(m_statDroppedProfiles)
                 .arg(m_pendingTriggers.size()).arg(m_pendingProfiles.size()));
 
         if (m_statAngles != m_statProfiles) {
             emit logMessage("WARN",
-                QString("Aci/profil sayilari esit degil (%1 != %2)! "
-                        "Tetik zincirinde kayip var; yuzey dalgalanmasinin olasi kaynagi.")
+                QString("Angle/profile counts are not equal (%1 != %2)! "
+                        "Loss in the trigger chain; a likely source of surface waviness.")
                     .arg(m_statAngles).arg(m_statProfiles));
         }
     }
     m_pendingTriggers.clear();
     m_pendingProfiles.clear();
 
-    emit logMessage("SYS", "Tarama durduruldu — lazer ve tamponlar temizlendi.");
+    emit logMessage("SYS", "Scan stopped — laser and buffers cleared.");
     if (!m_lastCloud.isEmpty()) {
-        addNewLayer(m_lastCloud, "Tarama Katmani");
+        addNewLayer(m_lastCloud, "Scan Layer");
         // Ham veriyi de katmana kaydediyoruz: originalPoints (projekte edilmis,
         // kalibrasyonsuz) + rawProfiles (projeksiyon oncesi aci/profil ciftleri).
         if(m_layers.contains(m_activeLayerId)) {
@@ -585,7 +585,7 @@ void ScanController::consumeHardwarePackets()
                     if (m_hasLastSeq && evt.seq > m_lastSeq + 1) {
                         m_statSeqGaps += (evt.seq - m_lastSeq - 1);
                         emit logMessage("WARN",
-                            QString("Tetik paketi kaybi: seq %1 -> %2")
+                            QString("Trigger packet loss: seq %1 -> %2")
                                 .arg(m_lastSeq).arg(evt.seq));
                     }
                     m_lastSeq = evt.seq;
@@ -833,8 +833,8 @@ void ScanController::reprojectActiveLayerFromRaw()
     emit layersUpdated();
     emit pointCloudReady(layer.points);
     emit logMessage("SYS",
-        QString("Katman ham veriden yeniden projekte edildi (dOffset=%1, lateral=%2). "
-                "Uygulanmis filtreler sifirlandi.")
+        QString("Layer re-projected from raw data (dOffset=%1, lateral=%2). "
+                "Applied filters have been reset.")
             .arg(m_dOffset, 0, 'f', 2).arg(m_lOffset, 0, 'f', 2));
 }
 
@@ -856,7 +856,7 @@ void ScanController::setDOffset(float mm)
 {
     const bool changed = (m_dOffset != mm);
     m_dOffset = mm;
-    emit logMessage("SYS", QString("D offset guncellendi: %1 mm").arg(m_dOffset, 0, 'f', 2));
+    emit logMessage("SYS", QString("D offset updated: %1 mm").arg(m_dOffset, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
@@ -870,7 +870,7 @@ void ScanController::setLateralOffset(float mm)
 {
     const bool changed = (m_lOffset != mm);
     m_lOffset = mm;
-    emit logMessage("SYS", QString("Lateral offset guncellendi: %1 mm").arg(m_lOffset, 0, 'f', 2));
+    emit logMessage("SYS", QString("Lateral offset updated: %1 mm").arg(m_lOffset, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
@@ -884,7 +884,7 @@ void ScanController::setZBaseOffset(float mm)
 {
     const bool changed = (m_zBaseOffset != mm);
     m_zBaseOffset = mm;
-    emit logMessage("SYS", QString("Yukseklik ofseti (Z0) guncellendi: %1 mm").arg(m_zBaseOffset, 0, 'f', 2));
+    emit logMessage("SYS", QString("Height offset (Z0) updated: %1 mm").arg(m_zBaseOffset, 0, 'f', 2));
     emit zBaseOffsetChanged(m_zBaseOffset);
 
     if (changed && !m_scanning)
@@ -910,7 +910,7 @@ void ScanController::autoZeroBase(float maxRadiusMm)
     }
 
     if (cloud.isEmpty()) {
-        emit logMessage("WRN", "Taban sifirlama icin taranmis veri bulunamadi.");
+        emit logMessage("WRN", "No scanned data found for base zeroing.");
         return;
     }
 
@@ -926,7 +926,7 @@ void ScanController::autoZeroBase(float maxRadiusMm)
 
     if (zs.size() < 200) {
         emit logMessage("WRN",
-            QString("Taban sifirlama: eksenin %1 mm yakininda yeterli nokta yok (%2).")
+            QString("Base zeroing: not enough points within %1 mm of the axis (%2).")
                 .arg(maxRadiusMm, 0, 'f', 0).arg(zs.size()));
         return;
     }
@@ -951,7 +951,7 @@ void ScanController::autoZeroBase(float maxRadiusMm)
     }
 
     emit logMessage("SYS",
-        QString("Taban tespit edildi: z=%1 mm (%2 nokta). Z0 ofseti duzeltiliyor.")
+        QString("Base detected: z=%1 mm (%2 points). Correcting Z0 offset.")
             .arg(zBase, 0, 'f', 2).arg(band.size()));
 
     // z = p.x() - zBaseOffset → tabani 0'a cekmek icin ofseti zBase kadar artir
@@ -961,7 +961,7 @@ void ScanController::autoZeroBase(float maxRadiusMm)
 void ScanController::setAs5600Resolution(float val)
 {
     m_as5600Resolution = val;
-    emit logMessage("SYS", QString("AS5600 cozunurlugu guncellendi: %1 deg").arg(m_as5600Resolution, 0, 'f', 2));
+    emit logMessage("SYS", QString("AS5600 resolution updated: %1 deg").arg(m_as5600Resolution, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
@@ -970,7 +970,7 @@ void ScanController::setAs5600Resolution(float val)
 void ScanController::setStepResolution(float val)
 {
     m_stepResolution = val;
-    emit logMessage("SYS", QString("Step cozunurlugu guncellendi: %1 deg").arg(m_stepResolution, 0, 'f', 2));
+    emit logMessage("SYS", QString("Step resolution updated: %1 deg").arg(m_stepResolution, 0, 'f', 2));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
@@ -979,7 +979,7 @@ void ScanController::setStepResolution(float val)
 void ScanController::setSecPerRev(float val)
 {
     m_secPerRev = val;
-    emit logMessage("SYS", QString("Tur suresi guncellendi: %1 sn").arg(m_secPerRev, 0, 'f', 1));
+    emit logMessage("SYS", QString("Revolution time updated: %1 s").arg(m_secPerRev, 0, 'f', 1));
 
     if (m_isSimMode && !m_scanning)
         rebuildSimWorkerIfPossible();
@@ -995,7 +995,7 @@ void ScanController::setLaserProfileRate(int hz)
         return;
     }
 
-    emit logMessage("SYS", QString("Lazer profil hizi guncellendi: %1 Hz").arg(m_laserProfileRate));
+    emit logMessage("SYS", QString("Laser profile rate updated: %1 Hz").arg(m_laserProfileRate));
 }
 
 void ScanController::setLaserShutterUs(int us)
@@ -1013,7 +1013,7 @@ void ScanController::setLaserShutterUs(int us)
         m_laser->applyAcquisitionSettings();
     }
 
-    emit logMessage("SYS", QString("Lazer shutter guncellendi: %1 us").arg(m_laserShutterUs));
+    emit logMessage("SYS", QString("Laser shutter updated: %1 us").arg(m_laserShutterUs));
 }
 
 void ScanController::setLaserAutoShutter(bool enabled)
@@ -1031,13 +1031,13 @@ void ScanController::setLaserAutoShutter(bool enabled)
 void ScanController::setLaserMeasuringField(const QString& field)
 {
     m_laserMeasuringField = field;
-    emit logMessage("SYS", QString("Olcum alani guncellendi: %1").arg(m_laserMeasuringField));
+    emit logMessage("SYS", QString("Measuring field updated: %1").arg(m_laserMeasuringField));
 }
 
 void ScanController::setLaserPointsPerProfile(int points)
 {
     m_laserPointsPerProfile = points;
-    emit logMessage("SYS", QString("Profil nokta sayisi guncellendi: %1").arg(m_laserPointsPerProfile));
+    emit logMessage("SYS", QString("Points per profile updated: %1").arg(m_laserPointsPerProfile));
 }
 
 void ScanController::setTriggerMode(ScanTriggerMode mode)
@@ -1049,7 +1049,7 @@ void ScanController::setTriggerMode(ScanTriggerMode mode)
 
     static const char* names[] = {"Time-Based", "Encoder", "External Trigger"};
     emit logMessage("SYS",
-                    QString("Tetik modu degistirildi: %1")
+                    QString("Trigger mode changed: %1")
                         .arg(names[static_cast<int>(mode)]));
 
     if (m_laser && m_laser->isConnected()) {
@@ -1070,7 +1070,7 @@ void ScanController::setTriggerSource(TriggerSource src)
         return;
 
     m_triggerSource = src;
-    emit logMessage("SYS", QString("Tetik kaynagi degistirildi: %1")
+    emit logMessage("SYS", QString("Trigger source changed: %1")
                                .arg(src == TriggerSource::AS5600 ? "AS5600" : "Step Acisi"));
 
     if (m_isSimMode && !m_scanning)
@@ -1091,15 +1091,15 @@ bool ScanController::sendSerialCommand(const QString& cmd)
 {
     if (!m_serialReader)
     {
-        emit logMessage("ERR", "Serial port bagli degil. Komut gonderilemedi.");
+        emit logMessage("ERR", "Serial port not connected. Command could not be sent.");
         return false;
     }
 
     bool ok = m_serialReader->sendCommand(cmd.toStdString());
     if (ok)
-        emit logMessage("SYS", QString("Arduino'ya gonderildi: %1").arg(cmd));
+        emit logMessage("SYS", QString("Sent to Arduino: %1").arg(cmd));
     else
-        emit logMessage("ERR", QString("Komut gonderilemedi: %1").arg(cmd));
+        emit logMessage("ERR", QString("Command could not be sent: %1").arg(cmd));
     return ok;
 }
 
@@ -1140,7 +1140,7 @@ void ScanController::applyFilterCylindrical(float radiusMm, float minZ, float ma
 
     layer.points = core::PointCloudProcessor::filterCylindrical(layer.points, radiusMm, minZ, maxZ);
     emit pointCloudReady(layer.points);
-    emit logMessage("SYS", QString("Silindir filtre uygulandi. Kalan nokta: %1").arg(layer.points.size()));
+    emit logMessage("SYS", QString("Cylinder filter applied. Remaining points: %1").arg(layer.points.size()));
 }
 
 void ScanController::applyFilterStatistical(int meanK, float stdDevThresh)
@@ -1157,7 +1157,7 @@ void ScanController::applyFilterStatistical(int meanK, float stdDevThresh)
 
     layer.points = core::PointCloudProcessor::filterStatisticalOutlier(layer.points, meanK, stdDevThresh);
     emit pointCloudReady(layer.points);
-    emit logMessage("SYS", QString("SOR (Statistical) uygulandi. Kalan nokta: %1").arg(layer.points.size()));
+    emit logMessage("SYS", QString("SOR (Statistical) applied. Remaining points: %1").arg(layer.points.size()));
 }
 
 void ScanController::applyFilterRadius(float radiusMm, int minNeighbors)
@@ -1174,7 +1174,7 @@ void ScanController::applyFilterRadius(float radiusMm, int minNeighbors)
 
     layer.points = core::PointCloudProcessor::filterRadiusOutlier(layer.points, radiusMm, minNeighbors);
     emit pointCloudReady(layer.points);
-    emit logMessage("SYS", QString("ROR (Radius) uygulandi. Kalan nokta: %1").arg(layer.points.size()));
+    emit logMessage("SYS", QString("ROR (Radius) applied. Remaining points: %1").arg(layer.points.size()));
 }
 
 void ScanController::applyFilterVoxelGrid(float leafSizeMm)
@@ -1191,7 +1191,7 @@ void ScanController::applyFilterVoxelGrid(float leafSizeMm)
 
     layer.points = core::PointCloudProcessor::filterVoxelGrid(layer.points, leafSizeMm);
     emit pointCloudReady(layer.points);
-    emit logMessage("SYS", QString("Voxel Grid (%1 mm) uygulandi. Kalan nokta: %2").arg(leafSizeMm).arg(layer.points.size()));
+    emit logMessage("SYS", QString("Voxel Grid (%1 mm) applied. Remaining points: %2").arg(leafSizeMm).arg(layer.points.size()));
 }
 
 void ScanController::applyManualDeletion(const QVector<int>& indicesToRemove)
@@ -1217,7 +1217,7 @@ void ScanController::applyManualDeletion(const QVector<int>& indicesToRemove)
     }
 
     emit pointCloudReady(layer.points);
-    emit logMessage("SYS", QString("%1 nokta manuel olarak silindi.").arg(indicesToRemove.size()));
+    emit logMessage("SYS", QString("%1 points deleted manually.").arg(indicesToRemove.size()));
 }
 
 void ScanController::undoLastFilter()
@@ -1250,7 +1250,7 @@ void ScanController::resetCloud()
 
     layer.points = layer.originalPoints;
     emit pointCloudReady(layer.points);
-    emit logMessage("SYS", "Nokta bulutu orijinal haline donduruldu.");
+    emit logMessage("SYS", "Point cloud reverted to its original state.");
 }
 
 
@@ -1261,7 +1261,7 @@ const QVector<QVector3D>& ScanController::getLastCloud() const { return m_lastCl
 void ScanController::addNewLayer(const QVector<QVector3D>& points, const QString& name)
 {
     ScanLayerData layer;
-    layer.name = name.isEmpty() ? QString("Katman %1").arg(m_nextLayerId + 1) : name;
+    layer.name = name.isEmpty() ? QString("Layer %1").arg(m_nextLayerId + 1) : name;
     layer.points = points;
     layer.originalPoints = points;
     layer.zOffsetMm = 0.0f;
@@ -1340,7 +1340,7 @@ void ScanController::generateMeshAsync()
     const QVector<QVector3D>& currentCloud = m_layers[m_activeLayerId].points;
     if (currentCloud.isEmpty()) return;
     
-    emit processingStarted("Hizli Yuzey Olusturuluyor...");
+    emit processingStarted("Generating Quick Surface...");
     disconnect(&m_watcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, nullptr);
     connect(&m_watcher, &QFutureWatcher<QVector<QVector3D>>::finished, this, &ScanController::onMeshFinished);
     
@@ -1360,10 +1360,10 @@ void ScanController::start3DCalibrationAsync(int method)
     }
 
     if (targetCloud.isEmpty()) {
-        emit logMessage("WARN", "Kalibrasyon icin nokta bulutu yok. Lutfen once kalibrasyon kumesini tarayin.");
+        emit logMessage("WARN", "No point cloud for calibration. Please scan the calibration set first.");
         return;
     }
-    emit processingStarted("3D PCL Kalibrasyonu Yapiliyor...");
+    emit processingStarted("Running 3D PCL Calibration...");
     if (m_calibrator) {
         CalibrationMethod calMethod = (method == 1) ? CalibrationMethod::MATH_PCA : CalibrationMethod::PCL_RANSAC;
         m_calibrator->startCalibration(targetCloud, calMethod);
@@ -1401,10 +1401,10 @@ void ScanController::reapplyCurrentCalibration()
 void ScanController::updateActiveCalibration(QString filePath)
 {
     if (m_calibrator && m_calibrator->loadCalibration(filePath)) {
-        emit logMessage("OK", QString("Kalibrasyon yuklendi: %1").arg(filePath));
+        emit logMessage("OK", QString("Calibration loaded: %1").arg(filePath));
         reapplyCurrentCalibration();
     } else {
-        emit logMessage("ERR", "Kalibrasyon dosyasi yuklenemedi!");
+        emit logMessage("ERR", "Calibration file could not be loaded!");
     }
 }
 
@@ -1412,7 +1412,7 @@ void ScanController::disableCalibration()
 {
     if (m_calibrator) {
         m_calibrator->clearCalibration();
-        emit logMessage("SYS", "3D Kalibrasyon devre disi birakildi. Ham verilere donuldu.");
+        emit logMessage("SYS", "3D Calibration disabled. Reverted to raw data.");
         
         // Mevcut butun layer'lari eski haline (ham) cevir
         for (auto it = m_layers.begin(); it != m_layers.end(); ++it) {
@@ -1446,8 +1446,8 @@ void ScanController::mergeWithICPAsync(const QVector<QVector3D>& target, const Q
 {
     if (m_icpRunning) return;
     m_icpRunning = true;
-    emit processingStarted("Hizalama + Birlestirme...");
-    emit logMessage("SYS", "Birlestirme pipeline'i basladi: kaba hizalama (tabla kisiti + yaw) -> GICP -> fuzyon");
+    emit processingStarted("Alignment + Merge...");
+    emit logMessage("SYS", "Merge pipeline started: coarse alignment (table constraint + yaw) -> GICP -> fusion");
 
     disconnect(&m_icpWatcher, &QFutureWatcher<core::MergeResult>::finished, this, nullptr);
     connect(&m_icpWatcher, &QFutureWatcher<core::MergeResult>::finished, this, &ScanController::onIcpFinished);
@@ -1517,21 +1517,21 @@ void ScanController::onIcpFinished()
 
     if (!mr.cloud.isEmpty()) {
         emit logMessage(mr.icpSuccess ? "OK" : "WARN",
-            QString("Birlestirme tamamlandi: RMS=%1 mm, ortusme=%2%, GICP=%3, nokta=%4")
+            QString("Merge complete: RMS=%1 mm, overlap=%2%, GICP=%3, points=%4")
                 .arg(mr.rmsMm, 0, 'f', 3)
                 .arg(mr.overlapRatio * 100.0f, 0, 'f', 1)
-                .arg(mr.icpSuccess ? "yakinsadi" : "YAKINSAMADI (kaba hizalama kullanildi)")
+                .arg(mr.icpSuccess ? "yakinsadi" : "DID NOT CONVERGE (coarse alignment used)")
                 .arg(mr.cloud.size()));
 
         if (mr.icpSuccess && mr.overlapRatio < 0.15f) {
             emit logMessage("WARN",
-                "Ortusme orani dusuk (<%15). Taramalar arasinda yeterli ortak yuzey "
-                "olmayabilir; hizalama guvenilir degilse farkli oryantasyon deneyin.");
+                "Overlap ratio is low (<%15). There may not be enough common surface "
+                "between scans; if alignment is unreliable, try a different orientation.");
         }
         if (mr.icpSuccess && mr.rmsMm > 0.3f) {
             emit logMessage("WARN",
-                "Hizalama RMS yuksek (>0.3 mm). dOffset/lateral kalibrasyonunu dogrulayin; "
-                "rijit hizalama kalibrasyondan gelen sekil bozulmasini duzeltemez.");
+                "Alignment RMS is high (>0.3 mm). Verify the dOffset/lateral calibration; "
+                "rigid alignment cannot fix shape distortion from calibration.");
         }
 
         addNewLayer(mr.cloud,
@@ -1539,7 +1539,7 @@ void ScanController::onIcpFinished()
                 .arg(mr.rmsMm, 0, 'f', 2)
                 .arg(mr.overlapRatio * 100.0f, 0, 'f', 0));
     } else {
-        emit logMessage("ERR", "Birlestirme basarisiz: sonuc bulutu bos.");
+        emit logMessage("ERR", "Merge failed: result cloud is empty.");
     }
     emit processingFinished();
 }
@@ -1550,8 +1550,8 @@ void ScanController::mergeSelectedLayers(const QVector<int>& layerIds, const QSt
     
     if (mode.contains("ICP", Qt::CaseInsensitive)) {
         int icpMode = 0;
-        if (mode.contains("Mevcut", Qt::CaseInsensitive)) icpMode = 4;
-        else if (mode.contains("Ters", Qt::CaseInsensitive)) icpMode = 1;
+        if (mode.contains("Current", Qt::CaseInsensitive)) icpMode = 4;
+        else if (mode.contains("Inverted", Qt::CaseInsensitive)) icpMode = 1;
         else if (mode.contains("X+90", Qt::CaseInsensitive)) icpMode = 2;
         else if (mode.contains("X-90", Qt::CaseInsensitive)) icpMode = 3;
 
@@ -1566,7 +1566,7 @@ void ScanController::mergeSelectedLayers(const QVector<int>& layerIds, const QSt
                 merged.append(m_layers[id].points);
             }
         }
-        addNewLayer(merged, "Birlesik Katman");
+        addNewLayer(merged, "Merged Layer");
     }
 }
 
@@ -1616,7 +1616,7 @@ void ScanController::commitManualAlignment()
     emit historySizeChanged(layer.history.size());
     
     m_manualAlignBaseCloud.clear();
-    emit logMessage("SYS", "Manuel hizalama kaydedildi.");
+    emit logMessage("SYS", "Manual alignment saved.");
 }
 
 void ScanController::cancelManualAlignment()
@@ -1659,7 +1659,7 @@ void ScanController::autoCalibrateOffsetAsync()
     }
 
     if (rawCopy.isEmpty() && cloudCopy.isEmpty()) {
-        emit logMessage("WRN", "Otomatik kalibrasyon icin aktif taranmis veri veya secili bir katman bulunamadi.");
+        emit logMessage("WRN", "No active scanned data or selected layer found for auto calibration.");
         return;
     }
 
@@ -1670,8 +1670,8 @@ void ScanController::autoCalibrateOffsetAsync()
     const bool useRaw = !rawCopy.isEmpty();
 
     emit logMessage("SYS", useRaw
-        ? "Offset aramasi ham (aci+profil) verisi uzerinden yapiliyor."
-        : "Ham veri yok; offset aramasi projekte edilmis bulut uzerinden yapiliyor (daha az kesin).");
+        ? "Offset search is running on raw (angle+profile) data."
+        : "No raw data; offset search runs on the projected cloud (less precise).");
 
     auto future = QtConcurrent::run(
         [rawCopy, cloudCopy, currentOffset, dOffset, useRaw]() -> AutoCalibResult {
@@ -1689,10 +1689,10 @@ void ScanController::autoCalibrateOffsetAsync()
         emit processingFinished();
         
         if (res.success) {
-            emit logMessage("SYS", QString("Otomatik Kalibrasyon Basarili. En iyi offset: %1 mm (Skor: %2)").arg(res.bestLateralOffset, 0, 'f', 2).arg(res.maxScore, 0, 'f', 0));
+            emit logMessage("SYS", QString("Auto Calibration successful. Best offset: %1 mm (Score: %2)").arg(res.bestLateralOffset, 0, 'f', 2).arg(res.maxScore, 0, 'f', 0));
             emit autoCalibrationFinished(res.bestLateralOffset, res.maxScore);
         } else {
-            emit logMessage("ERR", "Otomatik Kalibrasyon basarisiz oldu.");
+            emit logMessage("ERR", "Auto Calibration failed.");
         }
         watcher->deleteLater();
     });
@@ -1704,7 +1704,7 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
                                             float maxRadiusMm)
 {
     if (knownDiameterMm <= 0.0f || zMaxMm <= zMinMm) {
-        emit logMessage("ERR", "Cap kalibrasyonu: gecersiz parametreler.");
+        emit logMessage("ERR", "Diameter calibration: invalid parameters.");
         return;
     }
 
@@ -1728,7 +1728,7 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
     }
 
     if (cloudCopy.isEmpty()) {
-        emit logMessage("WRN", "Cap kalibrasyonu icin taranmis veri bulunamadi. Once silindiri tarayin.");
+        emit logMessage("WRN", "No scanned data found for diameter calibration. Scan the cylinder first.");
         return;
     }
 
@@ -1748,17 +1748,17 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
         cloudCopy = std::move(inner);
         if (removed > 0) {
             emit logMessage("SYS",
-                QString("Cap kalibrasyonu: eksenden %1 mm disindaki %2 nokta (ceper) elendi.")
+                QString("Diameter calibration: %2 points beyond %1 mm from the axis (rim) removed.")
                     .arg(maxRadiusMm, 0, 'f', 0).arg(removed));
         }
     }
 
     if (cloudCopy.isEmpty()) {
-        emit logMessage("WRN", "Cap kalibrasyonu: yaricap filtresi sonrasi nokta kalmadi.");
+        emit logMessage("WRN", "Diameter calibration: no points left after the radius filter.");
         return;
     }
 
-    emit processingStarted("Cap Kalibrasyonu (dOffset)");
+    emit processingStarted("Diameter Calibration (dOffset)");
 
     const float dOffsetNow = m_dOffset;
     const float lOffsetNow = m_lOffset;
@@ -1777,8 +1777,8 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
 
         if (!fit.success) {
             const QString msg = QString(
-                "Cap kalibrasyonu basarisiz: secilen z-bandinda yeterli/uygun nokta yok "
-                "(bantta %1 nokta bulundu). Banti silindirin duz govdesinden secin.")
+                "Diameter calibration failed: not enough/suitable points in the selected z-band "
+                "(%1 points found in the band). Select the band from the cylinder's straight body.")
                     .arg(fit.totalPoints);
             emit logMessage("ERR", msg);
             emit diameterCalibrationFinished(false, msg, dOffsetNow);
@@ -1801,16 +1801,16 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
                                            fit.centerYMm * fit.centerYMm);
 
         QString report = QString(
-            "Cap Kalibrasyonu Sonucu\n\n"
-            "[ Olcum ]\n"
-            "• Olculen cap: %1 mm (bilinen: %2 mm)\n"
+            "Diameter Calibration Result\n\n"
+            "[ Measurement ]\n"
+            "• Measured diameter: %1 mm (known: %2 mm)\n"
             "• Cap farki: %3 mm\n"
             "• Fit RMS artigi: %4 mm\n"
             "• Merkez kaymasi (eksene gore): %5 mm (X:%6, Y:%7)\n"
-            "• Kullanilan nokta: %8 / %9\n\n"
+            "• Points used: %8 / %9\n\n"
             "[ Oneri ]\n"
-            "• dOffset hatasi (eps): %10 mm\n"
-            "• Mevcut dOffset: %11 mm → Onerilen: %12 mm")
+            "• dOffset error (eps): %10 mm\n"
+            "• Current dOffset: %11 mm → Suggested: %12 mm")
                 .arg(fit.radiusMm * 2.0f, 0, 'f', 3)
                 .arg(knownDiameterMm, 0, 'f', 3)
                 .arg((fit.radiusMm - rTrue) * 2.0f, 0, 'f', 3)
@@ -1826,15 +1826,15 @@ void ScanController::calibrateDiameterAsync(float knownDiameterMm, float zMinMm,
 
         // Guvenilirlik uyarilari
         if (fit.rmsResidualMm > 0.15f) {
-            report += "\n\nUYARI: Fit RMS artigi yuksek (>0.15 mm). Once lateral "
-                      "offseti kalibre edin veya banti daha temiz bir bolgeden secin.";
+            report += "\n\nWARNING: Fit RMS residual is high (>0.15 mm). First calibrate the lateral "
+                      "offset, or select the band from a cleaner region.";
         }
         if (centerDist > 10.0f) {
-            report += "\n\nUYARI: Silindir eksenden cok uzak yerlestirilmis "
-                      "(>10 mm). Parcayi tabla merkezine yakin koyup tekrar tarayin.";
+            report += "\n\nWARNING: The cylinder is placed too far from the axis "
+                      "(>10 mm). Place the part near the table center and scan again.";
         }
 
-        emit logMessage("SYS", QString("Cap kalibrasyonu: olculen=%1 mm, onerilen dOffset=%2 mm")
+        emit logMessage("SYS", QString("Diameter calibration: measured=%1 mm, suggested dOffset=%2 mm")
                                    .arg(fit.radiusMm * 2.0f, 0, 'f', 3)
                                    .arg(suggested, 0, 'f', 2));
         emit diameterCalibrationFinished(true, report, suggested);

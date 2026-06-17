@@ -64,7 +64,7 @@ LayerItemWidget::LayerItemWidget(int layerId, const QString& name,
             [this]() { emit deleteRequested(m_layerId); });
 
     // Hizala butonu
-    auto* btnAlign = new QPushButton("Hizala", this);
+    auto* btnAlign = new QPushButton("Align", this);
     btnAlign->setFixedSize(40, 20);
     btnAlign->setCursor(Qt::PointingHandCursor);
     btnAlign->setStyleSheet(
