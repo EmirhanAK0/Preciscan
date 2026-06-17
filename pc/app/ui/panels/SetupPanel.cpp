@@ -15,14 +15,39 @@
 #include <QInputDialog>
 #include <QDialog>
 #include <QDir>
+#include <QSlider>
+#include <QScrollArea>
+#include <QFrame>
+#include <cmath>
+#include <algorithm>
 #include "../../utils/AutoCalibrator.h"
 
 #include "../../controller/ScanController.hpp"
 
+namespace {
+// Motorun fiziksel cozunurlugu: 3200 adim/devir (firmware CFG_ROT_STEPS_PER_REV).
+// Tetik cozunurlugu bunun tam katlari olmalidir; bunun altina inmek lazerde
+// tetik kacirmaya ve bulutta birikimli kaymaya yol aciyordu.
+constexpr double kMotorDegPerStep = 360.0 / 3200.0; // 0.1125 deg
+constexpr int    kMinSteps = 1;
+constexpr int    kMaxSteps = 16;
+}
+
 SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     : QWidget(parent), m_ctrl(ctrl)
 {
-    auto* layout = new QVBoxLayout(this);
+    // Panel pencereye sigmazsa widget'lar ezilmesin diye icerik bir QScrollArea'da.
+    auto* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* content = new QWidget;
+    scroll->setWidget(content);
+    outer->addWidget(scroll);
+
+    auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(15, 15, 15, 15);
     layout->setSpacing(10);
 
@@ -99,13 +124,38 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_as5600ResSpin->setSuffix(" deg");
     applySpinStyle(m_as5600ResSpin);
 
-    m_stepResSpin = new QDoubleSpinBox(this);
-    m_stepResSpin->setRange(0.01, 10.0);
-    m_stepResSpin->setDecimals(2);
-    m_stepResSpin->setSingleStep(0.25);
-    m_stepResSpin->setValue(1.0);
-    m_stepResSpin->setSuffix(" deg");
-    applySpinStyle(m_stepResSpin);
+    // Step cozunurlugu — motorun gercek adim sinirina (0.1125°) oturan slider.
+    // Her tik = N adim/tetik → N × 0.1125°. 1 adimin altina inilemez.
+    m_stepResSlider = new QSlider(Qt::Horizontal, this);
+    m_stepResSlider->setRange(kMinSteps, kMaxSteps);
+    m_stepResSlider->setSingleStep(1);
+    m_stepResSlider->setPageStep(1);
+    m_stepResValueLabel = new QLabel(this);
+    m_stepResValueLabel->setMinimumWidth(104);
+    m_stepResValueLabel->setStyleSheet("color:#5af;");
+
+    auto updateStepResLabel = [this]() {
+        const int n = m_stepResSlider->value();
+        m_stepResValueLabel->setText(QString("%1°  (%2 step%3)")
+            .arg(n * kMotorDegPerStep, 0, 'f', 3)
+            .arg(n)
+            .arg(n > 1 ? "s" : ""));
+    };
+    connect(m_stepResSlider, &QSlider::valueChanged, this,
+            [updateStepResLabel](int) { updateStepResLabel(); });
+
+    // Mevcut degerden baslat (yoksa 4 adim = 0.45°).
+    int initN = 4;
+    if (m_ctrl)
+        initN = static_cast<int>(std::lround(m_ctrl->stepResolution() / kMotorDegPerStep));
+    m_stepResSlider->setValue(std::clamp(initN, kMinSteps, kMaxSteps));
+    updateStepResLabel();
+
+    auto* stepResLayout = new QHBoxLayout();
+    stepResLayout->setContentsMargins(0, 0, 0, 0);
+    stepResLayout->setSpacing(6);
+    stepResLayout->addWidget(m_stepResSlider, 1);
+    stepResLayout->addWidget(m_stepResValueLabel, 0);
 
     m_profileRateSpin = new QSpinBox(this);
     m_profileRateSpin->setRange(1, 2000);
@@ -125,7 +175,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     form->addRow("Lateral Offset (X):", lOffsetLayout);
     form->addRow("Height Base (Z0):", zBaseLayout);
     form->addRow("AS5600 Resolution:", m_as5600ResSpin);
-    form->addRow("Step Resolution:", m_stepResSpin);
+    form->addRow("Step Resolution:", stepResLayout);
     form->addRow("Profile Rate (Hz):", m_profileRateSpin);
     form->addRow("Measuring Field:", m_measuringFieldCombo);
     form->addRow("Points per Profile:", m_pointsPerProfileCombo);
@@ -394,7 +444,7 @@ void SetupPanel::onApplyClicked()
     m_ctrl->setLateralOffset(static_cast<float>(m_lOffsetSpin->value()));
     m_ctrl->setZBaseOffset(static_cast<float>(m_zBaseSpin->value()));
     m_ctrl->setAs5600Resolution(static_cast<float>(m_as5600ResSpin->value()));
-    m_ctrl->setStepResolution(static_cast<float>(m_stepResSpin->value()));
+    m_ctrl->setStepResolution(static_cast<float>(m_stepResSlider->value() * kMotorDegPerStep));
     m_ctrl->setLaserProfileRate(m_profileRateSpin->value());
     m_ctrl->setLaserMeasuringField(m_measuringFieldCombo->currentText());
     m_ctrl->setLaserPointsPerProfile(m_pointsPerProfileCombo->currentText().toInt());
@@ -417,7 +467,9 @@ void SetupPanel::onReadClicked()
     m_lOffsetSpin->setValue(m_ctrl->lateralOffset());
     m_zBaseSpin->setValue(m_ctrl->zBaseOffset());
     m_as5600ResSpin->setValue(m_ctrl->as5600Resolution());
-    m_stepResSpin->setValue(m_ctrl->stepResolution());
+    m_stepResSlider->setValue(std::clamp(
+        static_cast<int>(std::lround(m_ctrl->stepResolution() / kMotorDegPerStep)),
+        kMinSteps, kMaxSteps));
     m_profileRateSpin->setValue(m_ctrl->laserProfileRate());
     m_measuringFieldCombo->setCurrentText(m_ctrl->laserMeasuringField());
     m_pointsPerProfileCombo->setCurrentText(QString::number(m_ctrl->laserPointsPerProfile()));

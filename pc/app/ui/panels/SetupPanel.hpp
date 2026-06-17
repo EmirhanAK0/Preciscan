@@ -11,6 +11,7 @@ class QCheckBox;
 class QComboBox;
 class QPushButton;
 class QLabel;
+class QSlider;
 
 class SetupPanel : public QWidget {
     Q_OBJECT
@@ -33,7 +34,8 @@ private:
     QDoubleSpinBox* m_zBaseSpin = nullptr;
     QPushButton* m_autoZeroBtn = nullptr;
     QDoubleSpinBox* m_as5600ResSpin = nullptr;
-    QDoubleSpinBox* m_stepResSpin = nullptr;
+    QSlider* m_stepResSlider = nullptr;       // motor adimina oturan cozunurluk
+    QLabel*  m_stepResValueLabel = nullptr;
 
     QSpinBox* m_profileRateSpin = nullptr;
 

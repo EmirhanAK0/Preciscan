@@ -13,6 +13,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QFrame>
+#include <QScrollArea>
 #include "../../../io/ply_writer.h"
 
 static QFrame* makeSep(QWidget* p) {
@@ -25,7 +26,18 @@ static QFrame* makeSep(QWidget* p) {
 ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QWidget* parent)
     : QWidget(parent), m_controller(controller), m_viz(viz)
 {
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    // Panel pencereye sigmazsa widget'lar ezilmesin diye icerik bir QScrollArea'da.
+    auto* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* content = new QWidget;
+    scroll->setWidget(content);
+    outer->addWidget(scroll);
+
+    QVBoxLayout* mainLayout = new QVBoxLayout(content);
     mainLayout->setContentsMargins(10, 10, 10, 10);
     mainLayout->setSpacing(10);
 

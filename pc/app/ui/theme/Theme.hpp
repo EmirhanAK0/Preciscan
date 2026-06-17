@@ -75,7 +75,7 @@ QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
 
 /* Butonlar — varsayilan = ikincil (secondary) */
 QPushButton { background: @surfaceRaised; color: @text; border: 1px solid @borderStrong;
-              border-radius: 5px; padding: 7px 12px; font-size: 12px; }
+              border-radius: 5px; padding: 7px 12px; font-size: 12px; min-height: 18px; }
 QPushButton:hover { background: @surfaceHover; border-color: #4a4a4a; }
 QPushButton:pressed { background: #2c2c2c; }
 QPushButton:disabled { background: @surface; color: @textDisabled; border-color: @border; }
@@ -100,7 +100,7 @@ QPushButton#connectBtn[state="on"] { background: @accentBg; color: @accent; bord
 /* Giris alanlari */
 QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
     background: @surface; color: @text; border: 1px solid @border;
-    border-radius: 4px; padding: 4px 6px; font-size: 12px; }
+    border-radius: 4px; padding: 4px 6px; font-size: 12px; min-height: 20px; }
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover { border-color: @borderStrong; }
 QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus { border: 1px solid @accent; }
 QComboBox::drop-down { border: none; width: 18px; }
