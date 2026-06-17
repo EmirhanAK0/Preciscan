@@ -124,6 +124,7 @@ ProcessPanel::ProcessPanel(ScanController* controller, VisualizerWidget* viz, QW
     lManual->addWidget(m_chkManualSelect);
 
     m_btnDeleteSelected = new QPushButton("Delete Selected Points", this);
+    m_btnDeleteSelected->setProperty("tier", "destructive");
     m_btnDeleteSelected->setEnabled(false);
     lManual->addWidget(m_btnDeleteSelected);
     mainLayout->addWidget(gbManual);

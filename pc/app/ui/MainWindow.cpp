@@ -22,6 +22,7 @@
 #include "panels/SetupPanel.hpp"
 #include "panels/ProcessPanel.hpp"
 #include "state/AppStateMachine.hpp"
+#include "theme/Theme.hpp"
 #include "widgets/ConnectingOverlay.hpp"
 #include "widgets/ProfileWidget.hpp"
 #include "widgets/VisualizerWidget.hpp"
@@ -81,23 +82,17 @@ void MainWindow::setupToolBar()
 {
     auto* tb = addToolBar("Hardware");
     tb->setMovable(false);
-    tb->setStyleSheet("QToolBar { background: #111; border-bottom: 1px solid #222; spacing: 4px; "
-                      "padding: 4px 8px; }"
-                      "QPushButton { border-radius: 4px; font-size: 10px; font-weight: bold; "
-                      "padding: 5px 12px; min-width: 90px; }");
 
     m_comPortCombo = new QComboBox(this);
     for (int i = 1; i <= 15; ++i) {
         m_comPortCombo->addItem(QString("COM%1").arg(i));
     }
-    m_comPortCombo->setStyleSheet(
-        "QComboBox { background: #1a1a1a; color: #ccc; border: 1px solid #333; border-radius: 4px; padding: 4px; font-size: 10px; }"
-    );
     // Varsayilan COM portunu ayarla
     m_comPortCombo->setCurrentText("COM3");
     tb->addWidget(m_comPortCombo);
 
     m_mcuBtn = new QPushButton("MCU  Connect", this);
+    m_mcuBtn->setObjectName("connectBtn");
     m_mcuBtn->setCheckable(true);
     connect(m_mcuBtn, &QPushButton::clicked, this,
             [this](bool checked)
@@ -125,6 +120,7 @@ void MainWindow::setupToolBar()
     tb->addWidget(spacerR);
 
     m_laserBtn = new QPushButton("Laser  Connect", this);
+    m_laserBtn->setObjectName("connectBtn");
     m_laserBtn->setCheckable(true);
     connect(m_laserBtn, &QPushButton::clicked, this,
             [this](bool checked)
@@ -166,13 +162,9 @@ void MainWindow::setupCentralWidget()
     leftSplitter->setStyleSheet("QSplitter::handle { background: #1a1a1a; }");
 
     m_tabWidget = new QTabWidget(this);
-    m_tabWidget->setFixedWidth(360);
-    m_tabWidget->setStyleSheet(
-        "QTabWidget::pane { border: none; background: #141414; }"
-        "QTabBar::tab { background:#1a1a1a; color:#777; padding:6px 14px; font-size:10px; "
-        "font-weight:bold; border:none; }"
-        "QTabBar::tab:selected { background:#141414; color:#eee; border-bottom:2px solid #2ecc71; }"
-        "QTabBar::tab:hover { color:#bbb; }");
+    // Sabit genislik yerine esnek: uzun butonlar tasmaz, splitter ile ayarlanabilir.
+    m_tabWidget->setMinimumWidth(340);
+    m_tabWidget->setMaximumWidth(460);
 
     m_scanPanel  = new ScanPanel(m_scanController, this);
     auto* scanPanel  = m_scanPanel;
@@ -244,8 +236,6 @@ void MainWindow::setupCentralWidget()
 void MainWindow::setupStatusBar()
 {
     auto* sb = statusBar();
-    sb->setStyleSheet("QStatusBar { background:#0d0d0d; color:#555; font-size:10px; border-top:1px "
-                      "solid #222; }");
 
     m_stateLabel = dotLabel("State: Idle", "#888", this);
     sb->addWidget(m_stateLabel);
@@ -270,20 +260,10 @@ void MainWindow::onStateChanged(AppState s)
 
 void MainWindow::updateConnectButton(QPushButton* btn, bool connected, const QString& baseName)
 {
-    if (connected)
-    {
-        btn->setText(baseName + "  Connected");
-        btn->setStyleSheet("QPushButton{background:#0d2a0d;color:#2ecc71;border:1px solid "
-                           "#2ecc71;border-radius:4px;font-size:10px;font-weight:bold;padding:5px "
-                           "12px;} QPushButton:hover{background:#0d3a0d;}");
-    }
-    else
-    {
-        btn->setText(baseName + "  Connect");
-        btn->setStyleSheet("QPushButton{background:#1e1e1e;color:#888;border:1px solid "
-                           "#444;border-radius:4px;font-size:10px;font-weight:bold;padding:5px "
-                           "12px;} QPushButton:hover{background:#2a2a2a;color:#bbb;}");
-    }
+    // Gorsel artik temadan geliyor (QPushButton#connectBtn[state=...]).
+    btn->setText(baseName + (connected ? "  Connected" : "  Connect"));
+    btn->setProperty("state", connected ? "on" : "off");
+    theme::repolish(btn);
 }
 
 void MainWindow::onMcuConnectionChanged(bool connected)

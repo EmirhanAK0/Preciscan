@@ -36,8 +36,7 @@ static QFrame* makeSep(QWidget* p)
 static QLabel* sectionLabel(const QString& t, QWidget* p)
 {
     auto* l = new QLabel(t, p);
-    l->setStyleSheet("color: #555; font-size: 9px; font-weight: bold; text-transform: uppercase; "
-                     "letter-spacing: 1px; margin-top: 4px;");
+    l->setObjectName("sectionLabel");   // gorsel temadan (QLabel#sectionLabel)
     return l;
 }
 
@@ -56,7 +55,6 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     grid->setVerticalSpacing(4);
 
     auto* speedLabel = new QLabel("Revolution Time (s):", this);
-    speedLabel->setStyleSheet("color: #aaa; font-size: 10px;");
     m_speedSlider = new QSlider(Qt::Horizontal, this);
     m_speedSlider->setRange(10, 250);
     m_speedSlider->setValue(30);
@@ -64,8 +62,6 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     m_speedSpin->setRange(10, 250);
     m_speedSpin->setValue(30);
     m_speedSpin->setFixedWidth(55);
-    m_speedSpin->setStyleSheet(
-        "background:#1a1a1a; color:#ccc; border:1px solid #333; border-radius:3px;");
     connect(m_speedSlider, &QSlider::valueChanged, m_speedSpin, &QSpinBox::setValue);
     connect(m_speedSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_speedSlider,
             &QSlider::setValue);
@@ -77,7 +73,6 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             });
 
     auto* expLabel = new QLabel("Exposure (us):", this);
-    expLabel->setStyleSheet("color: #aaa; font-size: 10px;");
     m_exposureSlider = new QSlider(Qt::Horizontal, this);
     m_exposureSlider->setRange(50, 5000);
     m_exposureSlider->setValue(500);
@@ -85,10 +80,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     m_exposureSpin->setRange(50, 5000);
     m_exposureSpin->setValue(500);
     m_exposureSpin->setFixedWidth(55);
-    m_exposureSpin->setStyleSheet(
-        "background:#1a1a1a; color:#ccc; border:1px solid #333; border-radius:3px;");
     m_autoShutterCheck = new QCheckBox("Auto", this);
-    m_autoShutterCheck->setStyleSheet("color: #aaa; font-size: 10px;");
     
     // Değerleri Control'den al
     if (m_ctrl) {
@@ -140,20 +132,12 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     m_startBtn   = new QPushButton("START SCAN", this);
     m_startBtn->setEnabled(false);
-    m_startBtn->setStyleSheet(
-        "QPushButton{background:#1a3a1a;color:#3a3;font-weight:bold;border:1px solid "
-        "#2a5;border-radius:4px;padding:7px;} QPushButton:enabled{background:#1c4a1c;color:#4e4;} "
-        "QPushButton:hover:enabled{background:#2ecc71;color:#000;} "
-        "QPushButton:disabled{background:#1a1a1a;color:#444;border-color:#333;}");
+    m_startBtn->setProperty("tier", "primary");   // birincil eylem
 
     m_stopBtn = new QPushButton("STOP", this);
     m_stopBtn->setEnabled(false);
     m_stopBtn->setFixedWidth(90);
-    m_stopBtn->setStyleSheet(
-        "QPushButton{background:#3a1a1a;color:#a33;font-weight:bold;border:1px solid "
-        "#a33;border-radius:4px;padding:7px;} QPushButton:enabled{background:#4a1a1a;color:#e44;} "
-        "QPushButton:hover:enabled{background:#e74c3c;color:#fff;} "
-        "QPushButton:disabled{background:#1a1a1a;color:#444;border-color:#333;}");
+    m_stopBtn->setProperty("tier", "destructive");
 
     QHBoxLayout* btnRow = new QHBoxLayout;
     btnRow->setSpacing(5);
@@ -168,9 +152,6 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     m_layerList = new QListWidget(this);
     m_layerList->setMaximumHeight(150);
-    m_layerList->setStyleSheet("QListWidget{background:#0d0d0d;color:#ccc;border:1px solid "
-                               "#2a2a2a;border-radius:3px;font-size:10px;} "
-                               "QListWidget::item{border:none;padding:0px;}");
     m_layerList->setSelectionMode(QAbstractItemView::NoSelection);
     root->addWidget(m_layerList);
 
@@ -189,25 +170,14 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
         "no preset rotation or automatic yaw search is applied; fine GICP\n"
         "alignment runs directly from the current pose. It is the most\n"
         "reliable method for symmetric objects (when text/detail matters).");
-    m_mergeMode->setStyleSheet("background:#1a1a1a;color:#ccc;border:1px solid "
-                               "#333;border-radius:3px;padding:2px;font-size:10px;");
     m_mergeBtn = new QPushButton("Merge", this);
-    m_mergeBtn->setFixedWidth(80);
-    m_mergeBtn->setStyleSheet("QPushButton{background:#1a2a3a;color:#5af;border:1px solid "
-                              "#25f;border-radius:3px;padding:4px;font-size:10px;} "
-                              "QPushButton:hover{background:#1e3a5a;}");
+    m_mergeBtn->setFixedWidth(80);                 // ikincil (varsayilan tema)
     m_addLayerBtn = new QPushButton("Load STL", this);
     m_addLayerBtn->setFixedWidth(65);
-    m_addLayerBtn->setStyleSheet(
-        "QPushButton{background:#222;color:#777;border:1px solid "
-        "#333;border-radius:3px;padding:4px;font-size:9px;} QPushButton:hover{color:#aaa;}");
+    m_addLayerBtn->setProperty("tier", "ghost");
 
     m_exportPlyBtn = new QPushButton("Export PLY", this);
-    m_exportPlyBtn->setFixedWidth(85);
-    m_exportPlyBtn->setStyleSheet(
-        "QPushButton{background:#1e3a24;color:#6fa;border:1px solid "
-        "#2a6;border-radius:3px;padding:4px;font-size:9px;font-weight:bold;} "
-        "QPushButton:hover{background:#2a4a34;}");
+    m_exportPlyBtn->setFixedWidth(85);             // ikincil (varsayilan tema)
 
     mergeRow->addWidget(m_mergeMode, 1);
     mergeRow->addWidget(m_mergeBtn, 0);
@@ -223,7 +193,6 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     zRow->setSpacing(4);
 
     auto* zLabel = new QLabel("Z:", this);
-    zLabel->setStyleSheet("color:#888;font-size:10px;");
 
     m_zMoveSpin = new QDoubleSpinBox(this);
     m_zMoveSpin->setRange(-100.0, 100.0);
@@ -231,15 +200,8 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
     m_zMoveSpin->setSuffix(" mm");
     m_zMoveSpin->setDecimals(1);
     m_zMoveSpin->setSingleStep(1.0);
-    m_zMoveSpin->setStyleSheet(
-        "QDoubleSpinBox{background:#1a1a1a;color:#5af;border:1px solid #333;"
-        "border-radius:3px;padding:3px;font-size:10px;}");
 
-    m_zMoveBtn = new QPushButton("Move", this);
-    m_zMoveBtn->setStyleSheet(
-        "QPushButton{background:#1a2a3a;color:#5af;border:1px solid "
-        "#25f;border-radius:3px;padding:4px;font-size:10px;font-weight:bold;} "
-        "QPushButton:hover{background:#1e3a5a;}");
+    m_zMoveBtn = new QPushButton("Move", this);   // ikincil (varsayilan tema)
     connect(m_zMoveBtn, &QPushButton::clicked, this,
             [this]() {
                 if (m_ctrl) {
@@ -250,10 +212,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             });
 
     m_zHomeBtn = new QPushButton("Z Home", this);
-    m_zHomeBtn->setStyleSheet(
-        "QPushButton{background:#2a2a1a;color:#da5;border:1px solid "
-        "#a83;border-radius:3px;padding:4px;font-size:9px;} "
-        "QPushButton:hover{background:#3a3a2a;color:#fc6;}");
+    m_zHomeBtn->setProperty("tier", "ghost");
     connect(m_zHomeBtn, &QPushButton::clicked, this,
             [this]() {
                 if (m_ctrl) {
@@ -263,10 +222,7 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
             });
 
     m_linHomeBtn = new QPushButton("Homing", this);
-    m_linHomeBtn->setStyleSheet(
-        "QPushButton{background:#2a1a2a;color:#a5f;border:1px solid "
-        "#83a;border-radius:3px;padding:4px;font-size:9px;} "
-        "QPushButton:hover{background:#3a2a3a;color:#c6f;}");
+    m_linHomeBtn->setProperty("tier", "ghost");
     connect(m_linHomeBtn, &QPushButton::clicked, this,
             [this]() {
                 if (m_ctrl) {
@@ -288,8 +244,6 @@ ScanPanel::ScanPanel(ScanController* ctrl, QWidget* parent) : QWidget(parent), m
 
     m_logView = new QTextEdit(this);
     m_logView->setReadOnly(true);
-    m_logView->setStyleSheet("background:#0a0a0a;color:#00cc66;font-family:Consolas,monospace;font-"
-                             "size:9px;border:1px solid #1a2a1a;border-radius:3px;");
     root->addWidget(m_logView, 1);
 
     // -- Baglanti ------------------------------------------------

@@ -27,15 +27,6 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     layout->setSpacing(10);
 
     auto* group = new QGroupBox("Laser & Scan Parameters", this);
-    group->setStyleSheet(
-        "QGroupBox {"
-        "  color: #aaa;"
-        "  font-weight: bold;"
-        "  border: 1px solid #333;"
-        "  margin-top: 10px;"
-        "  padding-top: 15px;"
-        "}"
-    );
 
     auto* form = new QFormLayout(group);
     form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -55,16 +46,6 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_diamCalibBtn->setToolTip(
         "Calibrates dOffset from a scan of a cylinder with a known diameter.\n"
         "Place the cylinder near the table center, scan it, then press this button.");
-    m_diamCalibBtn->setStyleSheet(
-        "QPushButton {"
-        "  background: #2a4a6a;"
-        "  color: white;"
-        "  border: 1px solid #3a5a7a;"
-        "  border-radius: 4px;"
-        "  padding: 2px 5px;"
-        "}"
-        "QPushButton:hover { background: #3a5a7a; }"
-    );
 
     auto* dOffsetLayout = new QHBoxLayout();
     dOffsetLayout->setContentsMargins(0, 0, 0, 0);
@@ -82,17 +63,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
 
     m_autoCalibBtn = new QPushButton("Auto Find", this);
     m_autoCalibBtn->setToolTip("Automatically computes the best lateral offset based on the last scan.");
-    m_autoCalibBtn->setStyleSheet(
-        "QPushButton {"
-        "  background: #2a4a6a;"
-        "  color: white;"
-        "  border: 1px solid #3a5a7a;"
-        "  border-radius: 4px;"
-        "  padding: 2px 5px;"
-        "}"
-        "QPushButton:hover { background: #3a5a7a; }"
-    );
-    
+
     auto* lOffsetLayout = new QHBoxLayout();
     lOffsetLayout->setContentsMargins(0, 0, 0, 0);
     lOffsetLayout->setSpacing(5);
@@ -113,16 +84,6 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_autoZeroBtn->setToolTip(
         "Automatically finds the active layer's base plane (table surface)\n"
         "and sets it to z=0. The layer is re-projected from raw data.");
-    m_autoZeroBtn->setStyleSheet(
-        "QPushButton {"
-        "  background: #2a4a6a;"
-        "  color: white;"
-        "  border: 1px solid #3a5a7a;"
-        "  border-radius: 4px;"
-        "  padding: 2px 5px;"
-        "}"
-        "QPushButton:hover { background: #3a5a7a; }"
-    );
 
     auto* zBaseLayout = new QHBoxLayout();
     zBaseLayout->setContentsMargins(0, 0, 0, 0);
@@ -169,49 +130,14 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     form->addRow("Measuring Field:", m_measuringFieldCombo);
     form->addRow("Points per Profile:", m_pointsPerProfileCombo);
 
-    m_readBtn = new QPushButton("Read from Device", this);
+    m_readBtn = new QPushButton("Read from Device", this);   // ikincil (varsayilan tema)
     m_applyBtn = new QPushButton("Apply", this);
-
-    m_readBtn->setStyleSheet(
-        "QPushButton {"
-        "  background: #1a1a1a;"
-        "  color: #ccc;"
-        "  border: 1px solid #333;"
-        "  border-radius: 4px;"
-        "  padding: 6px 10px;"
-        "}"
-        "QPushButton:hover {"
-        "  border: 1px solid #555;"
-        "}"
-    );
-
-    m_applyBtn->setStyleSheet(
-        "QPushButton {"
-        "  background: #0e5f2a;"
-        "  color: white;"
-        "  border: 1px solid #1faa59;"
-        "  border-radius: 4px;"
-        "  padding: 6px 10px;"
-        "  font-weight: bold;"
-        "}"
-        "QPushButton:hover {"
-        "  background: #117534;"
-        "}"
-    );
+    m_applyBtn->setProperty("tier", "primary");              // birincil eylem
 
     layout->addWidget(group);
 
     // ── Tetik Modu ──────────────────────────────────────────────
     auto* trigGroup = new QGroupBox("Trigger Mode", this);
-    trigGroup->setStyleSheet(
-        "QGroupBox {"
-        "  color: #5af;"
-        "  font-weight: bold;"
-        "  border: 1px solid #1a3a5a;"
-        "  margin-top: 10px;"
-        "  padding-top: 15px;"
-        "}"
-    );
 
     auto* trigForm = new QFormLayout(trigGroup);
     trigForm->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -261,7 +187,7 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
     m_calibMethodCombo->setCurrentIndex(1); // Varsayılan Matematiksel (PCA)
     
     m_start3DCalibBtn = new QPushButton("Start New 3D Calibration", this);
-    m_start3DCalibBtn->setStyleSheet("background-color: #8B0000; color: white; font-weight: bold;");
+    m_start3DCalibBtn->setProperty("tier", "primary");
 
     QHBoxLayout* calibControlLayout = new QHBoxLayout();
     m_calibProfileCombo = new QComboBox(this);
@@ -354,7 +280,9 @@ SetupPanel::SetupPanel(ScanController* ctrl, QWidget* parent)
 
         auto* btnRow = new QHBoxLayout();
         auto* okBtn = new QPushButton("Calculate", &dlg);
+        okBtn->setProperty("tier", "primary");
         auto* cancelBtn = new QPushButton("Cancel", &dlg);
+        cancelBtn->setProperty("tier", "ghost");
         okBtn->setDefault(true);
         btnRow->addStretch();
         btnRow->addWidget(cancelBtn);
@@ -451,15 +379,10 @@ void SetupPanel::refreshCalibrationList()
     m_calibProfileCombo->addItems(files);
 }
 
-void SetupPanel::applySpinStyle(QWidget* w)
+void SetupPanel::applySpinStyle(QWidget* /*w*/)
 {
-    w->setStyleSheet(
-        "background: #1a1a1a;"
-        "color: #ccc;"
-        "border: 1px solid #333;"
-        "border-radius: 4px;"
-        "padding: 4px;"
-    );
+    // Gorsel artik uygulama geneli temadan geliyor (QComboBox/QSpinBox/QDoubleSpinBox).
+    // Geriye donuk uyumluluk icin imza korunuyor; govde bos.
 }
 
 void SetupPanel::onApplyClicked()

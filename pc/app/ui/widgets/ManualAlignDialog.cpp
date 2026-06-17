@@ -57,8 +57,11 @@ ManualAlignDialog::ManualAlignDialog(ScanController* ctrl, QWidget* parent)
     // Butonlar
     QHBoxLayout* btnLayout = new QHBoxLayout;
     QPushButton* btnReset = new QPushButton("Reset", this);
+    btnReset->setProperty("tier", "ghost");
     QPushButton* btnCancel = new QPushButton("Cancel", this);
+    btnCancel->setProperty("tier", "ghost");
     QPushButton* btnApply = new QPushButton("Apply", this);
+    btnApply->setProperty("tier", "primary");
     btnApply->setDefault(true);
 
     btnLayout->addWidget(btnReset);
