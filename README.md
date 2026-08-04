@@ -1,111 +1,111 @@
 # Preciscan
 
-Preciscan, Micro-Epsilon scanCONTROL 2D lazer profilometresi ve motorize döner tabla kullanılarak geliştirilmiş, mikrometre altı yüzey metrolojisi için bir 360° 3D tarayıcı prototipidir.
+Preciscan is a 360° 3D scanner prototype built for sub-micrometer surface metrology, using a Micro-Epsilon scanCONTROL 2D laser profiler and a motorized turntable.
 
-## Sistem Mimarisi
+## System Architecture
 
 ```mermaid
 graph TD
-    subgraph Donanim
+    subgraph Hardware
         L[Micro-Epsilon scanCONTROL] -- UDP Ethernet --> PC
         M[STM32 Nucleo-F446RE] -- UART Serial --> PC
-        PC -- UART Komutlari --> M
-        M --> L_Motor[Lineer Motor]
-        M --> Z_Motor[Z Ekseni Motoru]
-        M --> T_Motor[Doner Tabla Motoru]
+        PC -- UART Commands --> M
+        M --> L_Motor[Linear Motor]
+        M --> Z_Motor[Z-Axis Motor]
+        M --> T_Motor[Turntable Motor]
     end
-    subgraph Yazilim
-        PC[PC Uygulamasi - Qt6/C++]
+    subgraph Software
+        PC[PC Application - Qt6/C++]
         PC --> SPSC[SPSC Ring Buffer]
-        SPSC --> PC_Proc[Nokta Bulutu Isleme]
-        PC_Proc --> PC_Rend[OpenGL Gorsellestirme]
+        SPSC --> PC_Proc[Point Cloud Processing]
+        PC_Proc --> PC_Rend[OpenGL Visualization]
     end
 ```
 
-## Calisma Prensibi
-Lazer profilleri Ethernet SDK asenkron callback araciligiyla, encoder acilari ise STM32 uzerinden UART ile PC'ye iletilir. Iki veri kaynagi FIFO kuyrugunda oransal esleme algoritmasi ile birlestirilir. Veri alimi, `std::atomic` acquire/release memory ordering kullanan lock-free SPSC ring buffer (Kapasite: 4096, `alignas(64)`) ile yonetilir. Bu mimari sayesinde veri alim thread'i bloklanmaz; 20,000 UDP paketinin 0 kayipla islendigi dogrulanmistir (`metrics_udp.json`). Tasma durumunda drop-newest politikasi uygulanir (`pc/core/spsc_ring_buffer.h`).
+## How It Works
+Laser profiles are delivered to the PC via asynchronous Ethernet SDK callbacks; encoder angles arrive from the STM32 over UART. The two data sources are merged in a FIFO queue using a proportional matching algorithm. Data acquisition is managed by a lock-free SPSC ring buffer (capacity: 4096, `alignas(64)`) with `std::atomic` acquire/release memory ordering. This architecture guarantees the acquisition thread never blocks; processing of 20,000 UDP packets with zero loss has been verified (`metrics_udp.json`). On overflow, a drop-newest policy is applied (`pc/core/spsc_ring_buffer.h`).
 
-## Temel Teknik Detaylar
+## Key Technical Details
 
-### Nokta Bulutu Isleme (8 Algoritma)
-Tarama sonrasi veriler `pc/app/utils/point_cloud_processor.h` icerisindeki algoritmalarla islenir:
-- Statistical Outlier Removal (SOR) ve Radius Outlier Removal (nanoflann KD-Tree).
-- PCL bagimliligi olmayan custom spatial hash tabanli Voxel Grid Downsampling.
-- Ozel implementasyon Horn kuaterniyon metodu ile ICP Point-to-Point hizalama.
-- PCL GeneralizedIterativeClosestPoint ile GICP Plane-to-Plane hizalama.
-- PCL MovingLeastSquares (MLS) ile yuzey duzlestirme.
-- K-NN PCA tabanli normal tahmini (disa donuk tutarlilik kontrollu).
-- Silindirik ROI filtreleme.
+### Point Cloud Processing (8 Algorithms)
+Post-scan data is processed through algorithms in `pc/app/utils/point_cloud_processor.h`:
+- Statistical Outlier Removal (SOR) and Radius Outlier Removal (nanoflann KD-Tree).
+- Custom spatial-hash based Voxel Grid Downsampling with no PCL dependency.
+- Custom ICP Point-to-Point alignment using Horn's quaternion method.
+- GICP Plane-to-Plane alignment via PCL GeneralizedIterativeClosestPoint.
+- Surface smoothing with PCL MovingLeastSquares (MLS).
+- K-NN PCA-based normal estimation with outward-oriented consistency enforcement.
+- Cylindrical ROI filtering.
 
-### Multi-View Birlestirme (Fusion)
-- Tabla duzlemine kisitli kaba hizalama (6-DOF'tan 1-DOF yaw rotasyonuna indirgenmis).
-- Simetrik objelerdeki hatali eslesmeleri cozen multi-start GICP aday secimi.
-- Cift cidar (double-wall) artefaktlarini tek yuzeye indiren voxel-centroid ve MLS tabanli fuzyon.
-- Poisson mesh uretimine hazir normalli PLY disa aktarimi.
+### Multi-View Merge (Fusion)
+- Table-plane constrained coarse alignment (reduced from 6-DOF to 1-DOF yaw rotation).
+- Multi-start GICP candidate selection to resolve misalignments on symmetric objects.
+- Voxel-centroid and MLS-based fusion that collapses double-wall artifacts into a single surface.
+- Normal-equipped PLY export ready for Poisson mesh reconstruction.
 
-### Kalibrasyon
-- Hough Transform ile yanal offset (lateral offset) icin kenar dogrusalligi maksimizasyonu.
-- Cap tabanli dOffset tespiti icin cebirsel cember uydurma ve 2.5σ robust aykiri deger reddi.
-- PCL RANSAC ve PCA kullanilarak 3D hizalama kalibrasyonu.
-- Ham profil verilerinin yeniden projeksiyonu (parametre degisiminde yeniden tarama gerektirmez).
+### Calibration
+- Hough Transform edge straightness maximization for lateral offset correction.
+- Algebraic circle fitting with 2.5σ robust outlier rejection for diameter-based dOffset detection.
+- 3D alignment calibration using PCL RANSAC and PCA.
+- Raw profile re-projection (no re-scan required when parameters change).
 
-### 3D Gorsellestirme
-VTK veya Qt3D kullanilmadan, dogrudan QOpenGLWidget uzerinden ozel OpenGL render motoru yazilmistir. Nokta bulutu, mesh, grid, eksenler ve olcum kutusu cizimleri desteklenir.
+### 3D Visualization
+A custom OpenGL rendering engine is implemented directly on QOpenGLWidget, without VTK or Qt3D. Supports point cloud, mesh, grid, axes, and measurement box rendering.
 
 ### MCU Firmware
-- STM32 F446RE uzerinde calisan C/C++ firmware (~3,600 satir, `firmware/src/main/app_controller.cpp`).
-- Moduler HAL yapisi (hal_stepper, hal_encoder, hal_laser, vb.).
-- FSM Mimarisi: READY → LIN_HOMING → LIN_POSITIONING → Z_HOMING → SCANNING → FAULT.
-- Adim sayisi tabanli aci hesaplamasi.
-- Hata toleransi icin cift limit switch ve E-STOP izolasyonu.
-- Seri port uzerinden komut aktarimi (HOME, ZHOME, ZMOVE:mm, START_CW, START_CCW, STOP, RESET) ve COBS + CRC16-CCITT dogrulamasi.
-- Sabit baslikli (magic, version, seq, timestamp, frame_id, flags) UDP protokol tasarimi.
+- C/C++ firmware running on STM32 F446RE (~3,600 lines, `firmware/src/main/app_controller.cpp`).
+- Modular HAL layer (hal_stepper, hal_encoder, hal_laser, etc.).
+- FSM architecture: READY → LIN_HOMING → LIN_POSITIONING → Z_HOMING → SCANNING → FAULT.
+- Step-count based angle calculation.
+- Dual limit switches and E-STOP isolation for fault tolerance.
+- Serial command interface (HOME, ZHOME, ZMOVE:mm, START_CW, START_CCW, STOP, RESET) with COBS + CRC16-CCITT verification.
+- Fixed-header UDP protocol design (magic, version, seq, timestamp, frame_id, flags).
 
-## Donanim Gereksinimleri
-- Micro-Epsilon scanCONTROL lazer profilometresi (InterfaceLLT_2 DLL destekli)
+## Hardware Requirements
+- Micro-Epsilon scanCONTROL laser profiler (InterfaceLLT_2 DLL compatible)
 - STM32 Nucleo-F446RE MCU
-- Rotary ve lineer (X, Z) eksenler icin step motorlar
-- Lineer ve Z eksenleri icin limit switch donanimlari
+- Stepper motors for rotary and linear (X, Z) axes
+- Limit switch hardware for linear and Z axes
 
-## Derleme Talimatlari
-- **PC Yazilimi:** C++17, Qt6 (Widgets, OpenGLWidgets, Concurrent), CMake gerektirir. Bagimliliklar: PCL, Eigen3, nanoflann, OpenGL.
+## Build Instructions
+- **PC Software:** Requires C++17, Qt6 (Widgets, OpenGLWidgets, Concurrent), CMake. Dependencies: PCL, Eigen3, nanoflann, OpenGL.
   ```bash
   cd pc
   cmake -B build
   cmake --build build --config Release
   ```
-- **Firmware:** PlatformIO ve STM32Cube HAL ile derlenir.
+- **Firmware:** Built with PlatformIO and STM32Cube HAL.
   ```bash
   cd firmware
   pio run
   ```
 
-## Depo Yapisi
+## Repository Structure
 ```
-pc/                    # PC uygulamasi (~71K satir C++)
-  app/                 # Qt6 arayuz kodlari, paneller ve gorsellestirme
-  core/                # FSM, ring buffer, paket kuyrugu ve sekans takibi
-  hardware/            # Micro-Epsilon SDK sarmalayicisi
-  io/                  # Veri okuma/yazma (PLY, STL, seri iletisim)
-  net/                 # UDP soket ve MCU dinleyicisi
-  sim/                 # Lazer simulasyonu ve STL mesh slicer
-  tests/               # Catch2 birim testleri
-  tools/               # CLI araclari (acquire_cli, udp_sender_sim vb.)
-firmware/              # STM32 yazilimi (~3,600 satir C/C++)
-  src/main/            # Temel kontrolor mantigi
-protocol/              # Iletisim protokolu dokumantasyonu (~600 satir) ve Protobuf semalari
-docs/                  # Mimari dokumantasyonu (~700 satir)
-tests/                 # Entegrasyon test verileri
-tools/                 # PowerShell utility scriptleri
+pc/                    # PC application (~71K lines C++)
+  app/                 # Qt6 UI code, panels, and visualization
+  core/                # FSM, ring buffer, packet queue, and sequence tracking
+  hardware/            # Micro-Epsilon SDK wrapper
+  io/                  # Data I/O (PLY, STL, serial communication)
+  net/                 # UDP socket and MCU listener
+  sim/                 # Laser simulation and STL mesh slicer
+  tests/               # Catch2 unit tests
+  tools/               # CLI tools (acquire_cli, udp_sender_sim, etc.)
+firmware/              # STM32 firmware (~3,600 lines C/C++)
+  src/main/            # Core controller logic
+protocol/              # Communication protocol documentation (~600 lines) and Protobuf schemas
+docs/                  # Architecture documentation (~700 lines)
+tests/                 # Integration test data
+tools/                 # PowerShell utility scripts
 ```
 
-## Test ve Surekli Entegrasyon (CI)
-- Catch2 v3 kullanilarak ScanStateMachine icin 34 durum makinesi testi (tum gecisler ve hata yollari).
-- Paket kaybi, mukerrer paket ve sirasiz paket tespiti icin SeqTracker testleri.
-- Testleri yerelde calistirmak icin:
+## Testing and CI
+- 34 state machine tests for ScanStateMachine using Catch2 v3 (all transitions and error paths).
+- SeqTracker tests for packet loss, duplicate, and out-of-order packet detection.
+- To run tests locally:
   ```bash
   cd pc/build
   ctest -C Release --output-on-failure
   ```
-- GitHub Actions uzerinde otomatik derleme, clang-format denetimi ve veri seti ile regresyon testleri.
-- STL mesh slicer kullanilarak sentetik lazer profilleri ile donanimsiz tam pipeline testi (Simulasyon modu).
+- Automated build, clang-format checks, and dataset-based regression tests on GitHub Actions.
+- Full pipeline testing without hardware using synthetic laser profiles generated by the STL mesh slicer (simulation mode).
