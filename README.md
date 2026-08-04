@@ -2,26 +2,6 @@
 
 Preciscan is a 360° 3D scanner prototype built for sub-micrometer surface metrology, using a Micro-Epsilon scanCONTROL 2D laser profiler and a motorized turntable.
 
-## System Architecture
-
-```mermaid
-graph TD
-    subgraph Hardware
-        L[Micro-Epsilon scanCONTROL] -- UDP Ethernet --> PC
-        M[STM32 Nucleo-F446RE] -- UART Serial --> PC
-        PC -- UART Commands --> M
-        M --> L_Motor[Linear Motor]
-        M --> Z_Motor[Z-Axis Motor]
-        M --> T_Motor[Turntable Motor]
-    end
-    subgraph Software
-        PC[PC Application - Qt6/C++]
-        PC --> SPSC[SPSC Ring Buffer]
-        SPSC --> PC_Proc[Point Cloud Processing]
-        PC_Proc --> PC_Rend[OpenGL Visualization]
-    end
-```
-
 ## How It Works
 Laser profiles are delivered to the PC via asynchronous Ethernet SDK callbacks; encoder angles arrive from the STM32 over UART. The two data sources are merged in a FIFO queue using a proportional matching algorithm. Data acquisition is managed by a lock-free SPSC ring buffer (capacity: 4096, `alignas(64)`) with `std::atomic` acquire/release memory ordering. This architecture guarantees the acquisition thread never blocks; processing of 20,000 UDP packets with zero loss has been verified (`metrics_udp.json`). On overflow, a drop-newest policy is applied (`pc/core/spsc_ring_buffer.h`).
 
